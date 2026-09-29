@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit real environment files
+.env
+.env.*
+!.env.example
+
+# Uploaded files (created in a later step)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Build output
+client/dist/
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test coverage
+coverage/

@@ -1,23 +1,17 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { useTheme } from "../../context/ThemeContext";
 import { profileAPI } from "../../services/api";
 import {
   Settings,
   User,
   Shield,
-  Palette,
   Check,
   Server,
   Lock,
-  Sun,
-  Moon,
-  Monitor,
 } from "lucide-react";
 
 const AdminSettings = () => {
   const { user, updateUser } = useAuth();
-  const { theme, setTheme } = useTheme();
 
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
@@ -127,59 +121,6 @@ const AdminSettings = () => {
               {profileLoading ? "Saving..." : "Save Profile Details"}
             </button>
           </form>
-        </div>
-      </div>
-
-      {/* Theme & Display Card */}
-      <div className="admin-table-card" style={{ marginBottom: 24 }}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--admin-border)", display: "flex", alignItems: "center", gap: 10 }}>
-          <Palette size={18} style={{ color: "var(--admin-primary)" }} />
-          <h2 style={{ fontSize: 16, fontWeight: 700 }}>Appearance & Theme</h2>
-        </div>
-
-        <div style={{ padding: 24 }}>
-          <p style={{ color: "var(--admin-text-muted)", fontSize: 13.5, marginBottom: 16 }}>
-            Choose your preferred color theme for the administration dashboard.
-          </p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14 }}>
-            {[
-              { id: "light", label: "Light Mode", icon: Sun },
-              { id: "dark", label: "Dark (OLED)", icon: Moon },
-              { id: "system", label: "System Default", icon: Monitor },
-            ].map((opt) => {
-              const Icon = opt.icon;
-              const isSelected = theme === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setTheme(opt.id)}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 18,
-                    borderRadius: 12,
-                    border: isSelected
-                      ? "2px solid var(--admin-primary)"
-                      : "1px solid var(--admin-border)",
-                    background: isSelected
-                      ? "var(--admin-primary-light)"
-                      : "var(--admin-card-bg)",
-                    color: isSelected ? "var(--admin-primary)" : "var(--admin-text-main)",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  <Icon size={24} />
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{opt.label}</span>
-                  {isSelected && <Check size={16} />}
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 

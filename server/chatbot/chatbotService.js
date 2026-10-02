@@ -15,6 +15,7 @@ const { generateAIResponse, generateCasualResponse } = require('../services/gemi
 const { searchRelevantChunks } = require('../services/knowledgeRetrievalService');
 const { hasEmbeddingApiKey } = require('../services/aiService');
 const { containsPhrase } = require('../utils/text');
+const { resolveDateTimeQuestion } = require('../utils/indiaDateTime');
 
 const INTENT_KEYWORDS = [
   ['HOD_LOOKUP', ['hod', 'h o d', 'h.o.d', 'h.o.d.', 'head of department', 'head of dept']],
@@ -42,6 +43,25 @@ const INTENT_KEYWORDS = [
   ['FACULTY', ['faculty', 'faculties', 'professor', 'professors', 'teacher', 'teachers', 'who teaches', 'faculty directory', 'lecturer', 'lecturers']],
   ['FAQ', ['faq', 'faqs', 'frequently asked questions', 'college timing', 'college timings', 'opening time', 'closing time', 'admission procedure', 'hostel facility', 'canteen facility']],
 ];
+
+function mediaActionLabel(url, mimeType, fileName) {
+  const mime = String(mimeType || '').split(';')[0].trim().toLowerCase();
+  const namedFile = String(fileName || '');
+  let path = namedFile;
+  if (!path) {
+    try { path = new URL(url).pathname; } catch { path = ''; }
+  }
+  const extension = path.split(/[?#]/, 1)[0].split('.').pop()?.toLowerCase();
+  if (mime === 'application/pdf' || extension === 'pdf') return 'View PDF';
+  if (mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) return 'View image';
+  if (mime.includes('wordprocessingml') || extension === 'docx') return 'Open DOCX';
+  if (mime.includes('spreadsheetml') || extension === 'xlsx') return 'Open XLSX';
+  if (mime.includes('presentationml') || extension === 'pptx') return 'Open PPTX';
+  if (extension === 'doc') return 'Open DOC';
+  if (extension === 'xls') return 'Open XLS';
+  if (extension === 'ppt') return 'Open PPT';
+  return 'Open document';
+}
 
 function isGreeting(text) {
   const normalized = text.toLowerCase().trim();
@@ -196,7 +216,10 @@ function formatNotices(notices, departmentCode) {
       lines.push(notice.body);
     }
     if (notice.attachment?.url) {
-      lines.push(`[${notice.attachment.originalName || 'Download attachment'}](${notice.attachment.url})`);
+      lines.push(`[${mediaActionLabel(notice.attachment.url, notice.attachment.mimeType, notice.attachment.originalName)}](${notice.attachment.url})`);
+    }
+    if (notice.image?.url) {
+      lines.push(`[${mediaActionLabel(notice.image.url, notice.image.mimeType, notice.image.originalName)}](${notice.image.url})`);
     }
 
     lines.push('');
@@ -221,6 +244,9 @@ function formatSyllabus(rows, departmentCode, semester) {
 
     if (row.fileUrl) {
       lines.push(`  - **Syllabus Document**: [Download Syllabus](${row.fileUrl})`);
+    }
+    if (row.image?.url) {
+      lines.push(`  - [View image](${row.image.url})`);
     }
   }
 
@@ -254,7 +280,10 @@ function formatPracticals(practicals, departmentCode, semester) {
       lines.push(`   - **Instructions**: ${p.instructions}`);
     }
     if (p.attachmentUrl) {
-      lines.push(`   - [Download practical material](${p.attachmentUrl})`);
+      lines.push(`   - [${mediaActionLabel(p.attachmentUrl)}](${p.attachmentUrl})`);
+    }
+    if (p.image?.url) {
+      lines.push(`   - [${mediaActionLabel(p.image.url, p.image.mimeType, p.image.fileName)}](${p.image.url})`);
     }
 
     lines.push('');
@@ -294,7 +323,10 @@ function formatAssignments(assignments, departmentCode, semester) {
       lines.push(`   - **Instructions**: ${a.instructions}`);
     }
     if (a.attachmentUrl) {
-      lines.push(`   - [Download assignment material](${a.attachmentUrl})`);
+      lines.push(`   - [${mediaActionLabel(a.attachmentUrl)}](${a.attachmentUrl})`);
+    }
+    if (a.image?.url) {
+      lines.push(`   - [${mediaActionLabel(a.image.url, a.image.mimeType, a.image.fileName)}](${a.image.url})`);
     }
 
     lines.push('');
@@ -331,7 +363,7 @@ function sourceFromRecord(record, category, title, url) {
     department: record.department || departmentService.ALL_CODE,
     uploadedAt: record.publishedAt || record.uploadedAt || record.createdAt || record.updatedAt || null,
   };
-  const sourceUrl = url || record.fileUrl || record.attachment?.url || record.attachmentUrl;
+  const sourceUrl = url || record.fileUrl || record.image?.url || record.attachment?.url || record.attachmentUrl;
   if (sourceUrl) source.url = sourceUrl;
   return source;
 }
@@ -554,13 +586,23 @@ async function handlePronounFollowUp(message, history, departmentCode) {
  * Main chatbot handler.
  */
 async function handleMessage(message, studentContext = null, conversationHistory = []) {
+  // Current time and relative dates must come from the server clock in India,
+  // never from stale model knowledge.
+  const dateTimeReply = resolveDateTimeQuestion(message);
+  if (dateTimeReply) {
+    return {
+      reply: dateTimeReply,
+      department: studentContext?.department || departmentService.ALL_CODE,
+    };
+  }
+
   // 1. Greetings
   if (isGreeting(message)) {
     const studentName = studentContext?.name;
     return {
       reply: studentName
-        ? `Welcome back, ${studentName}. I am your College AI Assistant for Government Polytechnic Unnao. How can I help you today?`
-        : 'Welcome to Government Polytechnic Unnao. I am your College AI Assistant. How can I help you today?',
+        ? `Welcome back, ${studentName}. I am College Chatbot, the AI Assistant for Government Polytechnic Unnao. How can I help you today?`
+        : 'Welcome to Government Polytechnic Unnao. I am College Chatbot, the AI Assistant for Government Polytechnic Unnao. How can I help you today?',
       department: studentContext?.department || departmentService.ALL_CODE,
     };
   }
@@ -600,7 +642,7 @@ async function handleMessage(message, studentContext = null, conversationHistory
   const isCollege = isCollegeSpecific(message, detectedDepartment, intent, conversationHistory);
 
   // -------------------------------------------------------------
-  // NON-COLLEGE / GENERAL QUESTION → GEMINI DIRECTLY
+  // NON-COLLEGE / GENERAL QUESTION → configured server-side chat provider
   // -------------------------------------------------------------
   if (!isCollege) {
     const aiReply = await generateCasualResponse(message, studentContext, conversationHistory);
@@ -690,12 +732,8 @@ async function handleMessage(message, studentContext = null, conversationHistory
         };
       }
 
-      const qualificationStr = hod.qualification ? ` (${hod.qualification})` : '';
-      const officeStr = hod.office ? `, Office: ${hod.office}` : '';
-      const emailStr = hod.email ? `, Email: ${hod.email}` : '';
-
       return {
-        reply: `The Head of Department for ${departmentCode} is **${hod.name}**${qualificationStr}${officeStr}${emailStr}.`,
+        reply: `The Head of Department for ${departmentCode} is **${hod.name}**.`,
         department: departmentCode,
         sources: [sourceFromRecord(hod, 'faculty', `${hod.department} Faculty Directory`)],
       };
@@ -776,9 +814,40 @@ async function handleMessage(message, studentContext = null, conversationHistory
     // 3. NOTICE
     // -----------------------------------------------------------
     case 'NOTICE': {
-      const notices = await Notice.find(activeNoticeFilter)
+      // A query without a named department means college-wide notices. Do not
+      // silently narrow it to the authenticated student's own department.
+      const noticeVisibility = detectedDepartment
+        ? departmentService.buildVisibilityFilter(departmentCode)
+        : {};
+      const noticeFilter = {
+        ...noticeVisibility,
+        $and: [{ $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] }],
+      };
+      const notices = await Notice.find(noticeFilter)
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(5);
+
+      if (notices.length > 0) {
+        const noticeContext = notices.map((notice) => [
+          `Title: ${notice.title}`,
+          `Department: ${notice.department || departmentService.ALL_CODE}`,
+          `Published: ${notice.publishedAt || notice.createdAt || 'Date not provided'}`,
+          `Details: ${notice.body || 'No additional details provided.'}`,
+        ].join('\n')).join('\n\n');
+
+        const aiReply = await generateAIResponse(
+          message,
+          noticeContext,
+          studentContext,
+          { isCollegeQuery: true, conversationHistory }
+        );
+
+        return {
+          reply: aiReply,
+          department: departmentCode || departmentService.ALL_CODE,
+          sources: notices.map((notice) => sourceFromRecord(notice, 'notice', notice.title)),
+        };
+      }
 
       return {
         reply: formatNotices(notices, departmentCode || departmentService.ALL_CODE),
@@ -928,11 +997,9 @@ async function handleMessage(message, studentContext = null, conversationHistory
         };
       }
 
-      const lines = [`**Faculty Directory for ${studentDept}**:`, ''];
+      const lines = [`**${studentDept} faculty:**`];
       facultyList.forEach((f, idx) => {
-        lines.push(`${idx + 1}. **${f.name}**${f.isHOD ? ' *(HOD)*' : ''}${f.designation ? ` - ${f.designation}` : ''}`);
-        if (f.office) lines.push(`   - **Office**: ${f.office}`);
-        if (f.email) lines.push(`   - **Email**: ${f.email}`);
+        lines.push(`- **${f.name}**${f.isHOD ? ' (HOD)' : ''}${f.designation ? ` - ${f.designation}` : ''}`);
       });
 
       return {
@@ -1053,7 +1120,7 @@ async function handleMessage(message, studentContext = null, conversationHistory
         };
       }
 
-      // Database has relevant records -> Ground Gemini response strictly in retrieved records
+      // Database has relevant records -> ground the provider response in retrieved records
       const contextParts = [];
       if (faqs && faqs.length) {
         contextParts.push(`FAQs:\n${faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`);

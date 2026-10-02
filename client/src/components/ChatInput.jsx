@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect } from "react";
 import { Send, X } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
 
@@ -13,7 +13,7 @@ const ChatInput = ({
   const { enterToSend } = useSettings();
 
   // Helper to safely focus textarea without scrolling or stealing modal focus
-  const focusInput = () => {
+  const focusInput = useCallback(() => {
     const hasOpenModal = Boolean(
       document.querySelector(
         ".modal-overlay, .admin-modal-overlay, .notices-modal-backdrop, .search-modal-overlay"
@@ -24,14 +24,14 @@ const ChatInput = ({
         textareaRef.current?.focus({ preventScroll: true });
       });
     }
-  };
+  }, [disabled, loading]);
 
   // Focus on initial mount
   useEffect(() => {
     if (window.innerWidth > 768) {
       focusInput();
     }
-  }, []);
+  }, [focusInput]);
 
   // Focus when AI finishes generating response
   useEffect(() => {
@@ -39,7 +39,7 @@ const ChatInput = ({
       focusInput();
     }
     prevLoadingRef.current = loading;
-  }, [loading, disabled]);
+  }, [focusInput, loading, disabled]);
 
   const handleSubmit = (e) => {
     e?.preventDefault();
@@ -150,7 +150,7 @@ const ChatInput = ({
       </form>
 
       <div className="input-disclaimer">
-        College AI Assistant can make mistakes. Verify important
+        College Chatbot can make mistakes. Verify important
         information with your college administration.
       </div>
     </div>

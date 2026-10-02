@@ -48,7 +48,7 @@ const AdminDashboard = () => {
   }, []);
 
   const statCards = [
-    { label: "Total Users", val: stats?.totalUsers ?? 0, icon: Users, color: "indigo", link: "/admin/students" },
+    { label: "Total Users", val: stats?.totalUsers ?? 0, icon: Users, color: "indigo", link: "/admin/users" },
     { label: "Total Students", val: stats?.totalStudents ?? 0, icon: Users, color: "indigo", link: "/admin/students" },
     { label: "Faculty Members", val: stats?.totalFaculty ?? 0, icon: GraduationCap, color: "emerald", link: "/admin/faculty" },
     { label: "Active Departments", val: stats?.totalDepartments ?? 0, icon: Building2, color: "amber", link: "/admin/departments" },

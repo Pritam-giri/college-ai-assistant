@@ -6,6 +6,7 @@ const facultySchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     designation: { type: String, trim: true }, // e.g. "HOD", "Assistant Professor"
+    qualification: { type: String, trim: true },
     email: { type: String, trim: true },
     phone: { type: String, trim: true },
     isHOD: { type: Boolean, default: false },

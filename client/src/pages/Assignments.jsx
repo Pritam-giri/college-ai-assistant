@@ -2,15 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { assignmentAPI } from "../services/api";
-import { safeHttpUrl } from "../safeUrl";
+import { useUnreadContent } from "../context/UnreadContentContext";
+import MediaAction from "../components/MediaAction";
 import {
   ArrowLeft,
   BookOpenCheck,
   Calendar,
   Award,
-  FileText,
   AlertCircle,
-  ExternalLink,
   Search,
   Clock,
   CheckCircle,
@@ -19,6 +18,7 @@ import {
 
 export default function Assignments() {
   const { user } = useAuth();
+  const { markContentRead } = useUnreadContent();
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -26,7 +26,7 @@ export default function Assignments() {
   const [activeTab, setActiveTab] = useState("all"); // 'all', 'upcoming', 'due_soon', 'closed'
 
   useEffect(() => {
-    document.title = "Assignments | College AI Assistant";
+    document.title = "Assignments | College Chatbot";
     fetchAssignments();
   }, [user]);
 
@@ -200,7 +200,11 @@ export default function Assignments() {
                     </span>
                   </div>
 
-                  <h2 className="academic-card-title">{item.title}</h2>
+                  <h2 className="academic-card-title">
+                    <button type="button" className="academic-card-title-open" onClick={() => markContentRead('assignment', item._id)}>
+                      {item.title}
+                    </button>
+                  </h2>
 
                   {item.description && (
                     <p className="academic-card-desc">{item.description}</p>
@@ -234,18 +238,10 @@ export default function Assignments() {
                     )}
                   </div>
 
-                  {item.attachmentUrl && (
+                  {(item.attachmentUrl || item.image?.url) && (
                     <div className="academic-card-footer">
-                      <a
-                        href={safeHttpUrl(item.attachmentUrl) || undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="academic-link-btn"
-                      >
-                        <FileText size={14} />
-                        <span>Assignment Brief / Worksheet</span>
-                        <ExternalLink size={12} />
-                      </a>
+                      {item.attachmentUrl && <MediaAction url={item.attachmentUrl} mimeType={item.attachment?.mimeType} fileName={item.attachment?.originalName} className="academic-link-btn" />}
+                      {item.image?.url && <MediaAction url={item.image.url} mimeType={item.image.mimeType} fileName={item.image.fileName} className="academic-link-btn" />}
                     </div>
                   )}
                 </article>

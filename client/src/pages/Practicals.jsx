@@ -2,15 +2,14 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { practicalAPI } from "../services/api";
-import { safeHttpUrl } from "../safeUrl";
+import { useUnreadContent } from "../context/UnreadContentContext";
+import MediaAction from "../components/MediaAction";
 import {
   ArrowLeft,
   FlaskConical,
   Calendar,
   Award,
-  FileText,
   AlertCircle,
-  ExternalLink,
   Search,
   Clock,
   User,
@@ -18,13 +17,14 @@ import {
 
 export default function Practicals() {
   const { user } = useAuth();
+  const { markContentRead } = useUnreadContent();
   const [practicals, setPracticals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    document.title = "Practicals | College AI Assistant";
+    document.title = "Practicals | College Chatbot";
     fetchPracticals();
   }, [user]);
 
@@ -148,7 +148,11 @@ export default function Practicals() {
                     </span>
                   </div>
 
-                  <h2 className="academic-card-title">{item.title}</h2>
+                  <h2 className="academic-card-title">
+                    <button type="button" className="academic-card-title-open" onClick={() => markContentRead('practical', item._id)}>
+                      {item.title}
+                    </button>
+                  </h2>
 
                   {item.description && (
                     <p className="academic-card-desc">{item.description}</p>
@@ -182,18 +186,10 @@ export default function Practicals() {
                     )}
                   </div>
 
-                  {item.attachmentUrl && (
+                  {(item.attachmentUrl || item.image?.url) && (
                     <div className="academic-card-footer">
-                      <a
-                        href={safeHttpUrl(item.attachmentUrl) || undefined}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="academic-link-btn"
-                      >
-                        <FileText size={14} />
-                        <span>Lab Manual / Reference File</span>
-                        <ExternalLink size={12} />
-                      </a>
+                      {item.attachmentUrl && <MediaAction url={item.attachmentUrl} mimeType={item.attachment?.mimeType} fileName={item.attachment?.originalName} className="academic-link-btn" />}
+                      {item.image?.url && <MediaAction url={item.image.url} mimeType={item.image.mimeType} fileName={item.image.fileName} className="academic-link-btn" />}
                     </div>
                   )}
                 </article>

@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const { escapeRegex } = require('../utils/text');
 const { validateHttpUrl } = require('../utils/httpUrl');
 const { notifyPublishedRecord } = require('../services/notificationService');
+const { uploadedImage, uploadedAttachment, createWithMedia, updateWithMedia, cleanupAcademicMedia } = require('../services/academicImageService');
 
 // GET /api/practicals
 const listPracticals = asyncHandler(async (req, res) => {
@@ -95,6 +96,8 @@ const createPractical = asyncHandler(async (req, res) => {
     attachmentUrl,
     status,
   } = req.body;
+  const attachmentFile = uploadedAttachment(req);
+  if (attachmentFile && String(attachmentUrl || '').trim()) throw new ApiError(400, 'Choose an attachment upload or a URL, not both.');
 
   validateHttpUrl(attachmentUrl, 'attachmentUrl');
 
@@ -112,7 +115,7 @@ const createPractical = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Department must be CSE, ELECTRONICS, or ALL.');
   }
 
-  const practical = await Practical.create({
+  const practical = await createWithMedia(Practical, {
     title: title.trim(),
     description: description ? description.trim() : '',
     subject: subject.trim(),
@@ -125,7 +128,7 @@ const createPractical = asyncHandler(async (req, res) => {
     attachmentUrl: attachmentUrl ? attachmentUrl.trim() : '',
     status: status ? status.toLowerCase() : 'published',
     createdBy: req.user._id,
-  });
+  }, uploadedImage(req), attachmentFile, 'practical');
 
   await notifyPublishedRecord(practical, 'PRACTICAL', `${practical.subject}${practical.dueDate ? ` · Due ${practical.dueDate.toLocaleDateString('en-IN')}` : ''}`);
 
@@ -157,6 +160,8 @@ const updatePractical = asyncHandler(async (req, res) => {
     attachmentUrl,
     status,
   } = req.body;
+  const attachmentFile = uploadedAttachment(req);
+  if (attachmentFile && String(attachmentUrl || '').trim()) throw new ApiError(400, 'Choose an attachment upload or a URL, not both.');
 
   validateHttpUrl(attachmentUrl, 'attachmentUrl');
 
@@ -181,10 +186,17 @@ const updatePractical = asyncHandler(async (req, res) => {
   if (instructions !== undefined) practical.instructions = instructions ? instructions.trim() : '';
   if (dueDate !== undefined) practical.dueDate = dueDate ? new Date(dueDate) : null;
   if (totalMarks !== undefined) practical.totalMarks = Number(totalMarks);
-  if (attachmentUrl !== undefined) practical.attachmentUrl = attachmentUrl ? attachmentUrl.trim() : '';
+  const attachmentData = attachmentUrl !== undefined ? { attachmentUrl: attachmentUrl ? attachmentUrl.trim() : '' } : {};
   if (status) practical.status = status.toLowerCase();
 
-  await practical.save();
+  await updateWithMedia(
+    practical,
+    attachmentData,
+    uploadedImage(req),
+    req.body.removeImage === 'true',
+    attachmentFile,
+    'practical'
+  );
 
   await notifyPublishedRecord(practical, 'PRACTICAL', `${practical.subject}${practical.dueDate ? ` · Due ${practical.dueDate.toLocaleDateString('en-IN')}` : ''}`);
 
@@ -204,6 +216,7 @@ const deletePractical = asyncHandler(async (req, res) => {
   }
 
   await practical.deleteOne();
+  await cleanupAcademicMedia(practical);
 
   res.json({
     success: true,

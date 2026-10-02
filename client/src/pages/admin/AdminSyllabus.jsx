@@ -3,6 +3,8 @@ import { syllabusAPI, departmentAPI } from "../../services/api";
 import { safeHttpUrl } from "../../safeUrl";
 import Modal from "../../components/Modal";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import OptionalImageField from "../../components/OptionalImageField";
+import MediaAction from "../../components/MediaAction";
 import {
   BookOpen,
   Plus,
@@ -38,6 +40,10 @@ const AdminSyllabus = () => {
   });
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [existingImage, setExistingImage] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const [imageError, setImageError] = useState("");
 
   // Delete State
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -74,6 +80,10 @@ const AdminSyllabus = () => {
 
   const openCreateModal = () => {
     setEditingItem(null);
+    setExistingImage(null);
+    setImageFile(null);
+    setRemoveImage(false);
+    setImageError("");
     setFormData({
       department: departments[0]?.code || "",
       semester: 1,
@@ -88,6 +98,10 @@ const AdminSyllabus = () => {
 
   const openEditModal = (item) => {
     setEditingItem(item);
+    setExistingImage(item.image || null);
+    setImageFile(null);
+    setRemoveImage(false);
+    setImageError("");
     setFormData({
       department: item.department,
       semester: item.semester,
@@ -116,6 +130,8 @@ const AdminSyllabus = () => {
       subjectName: formData.subjectName.trim(),
       fileUrl: formData.fileUrl.trim(),
       topics: topicsArray,
+      imageFile,
+      removeImage,
     };
 
     try {
@@ -136,7 +152,7 @@ const AdminSyllabus = () => {
       }
     } catch (err) {
       console.error("Failed to save syllabus");
-      setFormError(err.response?.data?.message || "Failed to save syllabus item.");
+      setFormError(err.response?.data?.message || "Failed to save syllabus item or upload its image.");
     } finally {
       setFormLoading(false);
     }
@@ -341,6 +357,11 @@ const AdminSyllabus = () => {
                       ) : (
                         "-"
                       )}
+                      {item.image?.url && (
+                        <div style={{ marginTop: 6 }}>
+                          <MediaAction url={item.image.url} mimeType={item.image.mimeType} fileName={item.image.fileName} className="academic-link-btn" />
+                        </div>
+                      )}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "inline-flex", gap: 6 }}>
@@ -486,6 +507,20 @@ const AdminSyllabus = () => {
                 onChange={(e) => setFormData({ ...formData, fileUrl: e.target.value })}
               />
             </div>
+
+            <OptionalImageField
+              image={existingImage}
+              file={imageFile}
+              removeExisting={removeImage}
+              onFileChange={(file, message) => {
+                setImageFile(file);
+                setImageError(message);
+                if (file) setRemoveImage(false);
+              }}
+              onRemoveExisting={() => setRemoveImage(true)}
+              onRestoreExisting={() => setRemoveImage(false)}
+              error={imageError}
+            />
           </form>
         </Modal>
       )}

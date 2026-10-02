@@ -65,6 +65,98 @@ const stub = {
   findOne: async () => null,
 };
 
+function fakeResponse() {
+  return {
+    statusCode: null,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; },
+  };
+}
+
+test('chat API saves the exchange and returns the assistant reply with sources', async () => {
+  const id = '507f1f77bcf86cd799439011';
+  const user = {
+    _id: { toString: () => id },
+    name: 'Test Student',
+    email: 'student@example.test',
+    role: 'student',
+    department: 'CSE',
+    semester: 3,
+    rollNumber: 'R-1',
+  };
+  const conversation = {
+    _id: id,
+    title: 'Who is my HOD?',
+    save: async () => {},
+  };
+  const savedMessages = [];
+  const sources = [{ title: 'CSE Faculty List', category: 'faculty', department: 'CSE' }];
+  let receivedQuestion;
+  let receivedStudent;
+  const controller = loadFresh('controllers/chatController', {
+    paths: {
+      'models/User': { findById: async () => user },
+      'models/Conversation': { create: async () => conversation, findOne: async () => conversation },
+      'models/Message': {
+        create: async (data) => {
+          const saved = { ...data, _id: `message-${savedMessages.length}`, createdAt: new Date() };
+          savedMessages.push(saved);
+          return saved;
+        },
+        find: () => ({
+          sort: () => ({ limit: () => ({ lean: async () => savedMessages.slice(-6) }) }),
+        }),
+      },
+      'chatbot/chatbotService': {
+        handleMessage: async (message, student) => {
+          receivedQuestion = message;
+          receivedStudent = student;
+          return { reply: 'Your CSE HOD is listed in the faculty directory.', department: 'CSE', sources };
+        },
+      },
+    },
+  });
+  const res = fakeResponse();
+  let receivedError;
+
+  await controller.chat(
+    { body: { message: '  Who is my HOD?  ' }, user: { _id: id } },
+    res,
+    (error) => { receivedError = error; }
+  );
+
+  assert.equal(receivedError, undefined);
+  assert.equal(res.statusCode, 200);
+  assert.equal(receivedQuestion, 'Who is my HOD?');
+  assert.equal(receivedStudent.department, 'CSE');
+  assert.deepEqual(savedMessages.map((message) => message.role), ['user', 'assistant']);
+  assert.equal(res.body.data.reply, 'Your CSE HOD is listed in the faculty directory.');
+  assert.deepEqual(res.body.data.sources, sources);
+  assert.equal(res.body.data.conversationId, id);
+});
+
+test('chat API rejects blank and oversized messages before database access', async () => {
+  let databaseTouched = false;
+  const controller = loadFresh('controllers/chatController', {
+    paths: {
+      'models/User': { findById: async () => { databaseTouched = true; return null; } },
+      'models/Conversation': {},
+      'models/Message': {},
+      'chatbot/chatbotService': { handleMessage: async () => ({ reply: '' }) },
+    },
+  });
+
+  for (const message of ['', ' '.repeat(2), 'x'.repeat(4001)]) {
+    let receivedError;
+    await controller.chat({ body: { message }, user: { _id: 'student-id' } }, fakeResponse(), (error) => {
+      receivedError = error;
+    });
+    assert.equal(receivedError.statusCode, 400);
+  }
+  assert.equal(databaseTouched, false);
+});
+
 test('TEST 1: Who is the CSE HOD? -> Real database lookup', async () => {
   let queriedFilter = null;
   const { handleMessage } = loadFresh('chatbot/chatbotService', {
@@ -143,6 +235,49 @@ test('HOD lookup follows the requested department and permits cross-department q
   const reverseCrossDepartment = await handleMessage('Who is the CSE HOD?', electronicsStudent);
   assert.match(reverseCrossDepartment.reply, /Dr\. Raj Kumar/);
   assert.equal(facultyQueries.at(-1).department, 'CSE');
+});
+
+test('faculty questions search the named department, including cross-department requests', async () => {
+  const queries = [];
+  const faculty = {
+    find: (query) => ({
+      sort: () => ({
+        limit: async () => {
+          queries.push(query);
+          return [{
+            name: `SAMPLE / DEVELOPMENT DATA ${query.department} Faculty`,
+            designation: 'Sample instructor',
+            department: query.department,
+            isHOD: true,
+          }];
+        },
+      }),
+    }),
+  };
+  const { handleMessage } = loadFresh('chatbot/chatbotService', {
+    paths: {
+      'models/Department': fakeDepartmentModel(),
+      'models/Notice': stub,
+      'models/Timetable': stub,
+      'models/Syllabus': stub,
+      'models/FAQ': stub,
+      'models/KnowledgeBase': stub,
+      'models/Practical': stub,
+      'models/Assignment': stub,
+      'models/Document': stub,
+      'models/Faculty': faculty,
+    },
+  });
+
+  const cseStudent = { ...mockStudent, department: 'CSE' };
+  const cseResult = await handleMessage('CSE ke faculty kaun hain?', cseStudent);
+  assert.deepEqual(queries.at(-1), { department: 'CSE' });
+  assert.match(cseResult.reply, /SAMPLE \/ DEVELOPMENT DATA CSE Faculty/);
+  assert.equal(cseResult.sources[0].category, 'faculty');
+
+  const electronicsResult = await handleMessage('Electronics ke faculty kaun hain?', cseStudent);
+  assert.deepEqual(queries.at(-1), { department: 'ELECTRONICS' });
+  assert.match(electronicsResult.reply, /SAMPLE \/ DEVELOPMENT DATA ELECTRONICS Faculty/);
 });
 
 test('TEST 2: What is recursion? -> Department and intent detection then Gemini', async () => {
@@ -570,6 +705,145 @@ test('FAQ and knowledge-base answers include their records as sources', async ()
   assert.deepEqual(result.sources.map((source) => source.title), [faq.question, knowledge.title]);
 });
 
+test('PDF retrieval grounds college answers, returns source links, and refuses when no chunks match', async () => {
+  const retrievedChunk = {
+    content: 'Students must maintain the attendance required by the current academic rules.',
+    score: 0.88,
+    source: {
+      title: 'CSE Student Handbook',
+      category: 'handbook',
+      department: 'CSE',
+      url: 'https://files.example/cse-handbook.pdf',
+      uploadedAt: new Date('2026-09-01'),
+    },
+  };
+  let chunks = [retrievedChunk];
+  let generationCalls = 0;
+  let receivedContext = '';
+  const { handleMessage } = loadFresh('chatbot/chatbotService', {
+    paths: {
+      'models/Department': fakeDepartmentModel(),
+      'models/Notice': stub,
+      'models/Timetable': stub,
+      'models/Syllabus': stub,
+      'models/FAQ': stub,
+      'models/KnowledgeBase': stub,
+      'models/Practical': stub,
+      'models/Assignment': stub,
+      'models/Document': stub,
+      'models/Faculty': stub,
+      'services/aiService': { hasEmbeddingApiKey: true },
+      'services/knowledgeRetrievalService': { searchRelevantChunks: async () => chunks },
+      'services/geminiService': {
+        generateAIResponse: async (_message, context) => {
+          generationCalls += 1;
+          receivedContext = context;
+          return 'The handbook says students must follow the attendance requirements.';
+        },
+        generateCasualResponse: async () => 'unused',
+      },
+    },
+  });
+
+  const question = 'What does the CSE student handbook say about attendance rules?';
+  const grounded = await handleMessage(question, mockStudent);
+  assert.equal(generationCalls, 1);
+  assert.match(receivedContext, /\[Source: CSE Student Handbook\]/);
+  assert.match(receivedContext, /attendance required/);
+  assert.match(grounded.reply, /attendance requirements/);
+  assert.deepEqual(grounded.sources, [retrievedChunk.source]);
+
+  chunks = [];
+  const missing = await handleMessage(question, mockStudent);
+  assert.equal(generationCalls, 1);
+  assert.match(missing.reply, /could not find relevant text/i);
+  assert.deepEqual(missing.sources, []);
+});
+
+test('timetable, syllabus, and document queries return department-filtered records with sources', async () => {
+  const scenarios = [
+    {
+      model: 'Timetable',
+      question: 'Show me the CSE timetable for semester 3',
+      record: { department: 'CSE', semester: 3, section: 'A', day: 'MON', slots: [{ time: '09:00-10:00', subject: 'Data Structures' }] },
+      expectedFilter: { department: 'CSE', semester: 3 },
+      expectedCategory: 'timetable',
+      expectedTitle: 'CSE Semester 3 Timetable',
+    },
+    {
+      model: 'Timetable',
+      question: 'Electronics ka timetable batao.',
+      record: { department: 'ELECTRONICS', semester: 3, section: 'A', day: 'TUE', slots: [{ time: '09:00-10:00', subject: 'SAMPLE / DEVELOPMENT DATA: Digital Electronics' }] },
+      expectedFilter: { department: 'ELECTRONICS', semester: 3 },
+      expectedCategory: 'timetable',
+      expectedTitle: 'ELECTRONICS Semester 3 Timetable',
+    },
+    {
+      model: 'Syllabus',
+      question: 'Show me the CSE syllabus for semester 3',
+      record: { department: 'CSE', semester: 3, subjectName: 'Data Structures', subjectCode: 'CS301', fileUrl: 'https://files.example/cse-syllabus.pdf' },
+      expectedFilter: { department: 'CSE', semester: 3 },
+      expectedCategory: 'syllabus',
+      expectedTitle: 'Data Structures Syllabus',
+      expectedUrl: 'https://files.example/cse-syllabus.pdf',
+    },
+    {
+      model: 'Document',
+      question: 'Show all CSE PDF documents',
+      record: { department: 'CSE', title: 'CSE Student Handbook', category: 'handbook', fileUrl: 'https://files.example/cse-handbook.pdf' },
+      expectedFilter: { department: { $in: ['CSE', 'ALL'] } },
+      expectedCategory: 'document',
+      expectedTitle: 'CSE Student Handbook',
+      expectedUrl: 'https://files.example/cse-handbook.pdf',
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    let receivedFilter;
+    const query = {
+      populate: () => query,
+      sort: () => query,
+      limit: async () => [scenario.record],
+    };
+    const modelStub = {
+      find: (filter) => {
+        receivedFilter = filter;
+        if (scenario.model === 'Syllabus') return { sort: async () => [scenario.record] };
+        return query;
+      },
+    };
+    const { handleMessage } = loadFresh('chatbot/chatbotService', {
+      paths: {
+        'models/Department': fakeDepartmentModel(),
+        'models/Notice': stub,
+        'models/Timetable': scenario.model === 'Timetable' ? modelStub : stub,
+        'models/Syllabus': scenario.model === 'Syllabus' ? modelStub : stub,
+        'models/FAQ': stub,
+        'models/KnowledgeBase': stub,
+        'models/Practical': stub,
+        'models/Assignment': stub,
+        'models/Document': scenario.model === 'Document' ? modelStub : stub,
+        'models/Faculty': stub,
+        'services/departmentService': {
+          ALL_CODE: 'ALL',
+          getActiveDepartments: async () => seeded,
+          buildVisibilityFilter: (department) => department
+            ? { department: { $in: [department, 'ALL'] } }
+            : { department: 'ALL' },
+        },
+        'services/aiService': { hasEmbeddingApiKey: false },
+        'services/knowledgeRetrievalService': { searchRelevantChunks: async () => [] },
+      },
+    });
+
+    const result = await handleMessage(scenario.question, mockStudent);
+    assert.deepEqual(receivedFilter, scenario.expectedFilter, scenario.model);
+    assert.equal(result.sources[0].category, scenario.expectedCategory, scenario.model);
+    assert.equal(result.sources[0].title, scenario.expectedTitle, scenario.model);
+    if (scenario.expectedUrl) assert.equal(result.sources[0].url, scenario.expectedUrl, scenario.model);
+  }
+});
+
 test('notice answers query only visible department records that have not expired', async () => {
   let noticeFilter;
   const { handleMessage } = loadFresh('chatbot/chatbotService', {
@@ -597,5 +871,32 @@ test('notice answers query only visible department records that have not expired
   const expiryFilter = noticeFilter.$and[0].$or;
   assert.equal(expiryFilter[0].expiresAt, null);
   assert.ok(expiryFilter[1].expiresAt.$gt instanceof Date);
+});
+
+test('college-wide latest notice queries include all department records', async () => {
+  let noticeFilter;
+  const { handleMessage } = loadFresh('chatbot/chatbotService', {
+    paths: {
+      'models/Department': fakeDepartmentModel(),
+      'models/Notice': { find: (filter) => {
+        noticeFilter = filter;
+        return { sort: () => ({ limit: async () => [] }) };
+      } },
+      'models/Timetable': stub,
+      'models/Syllabus': stub,
+      'models/FAQ': stub,
+      'models/KnowledgeBase': stub,
+      'models/Practical': stub,
+      'models/Assignment': stub,
+      'models/Document': stub,
+      'models/Faculty': stub,
+      'services/aiService': { hasEmbeddingApiKey: false },
+      'services/knowledgeRetrievalService': { searchRelevantChunks: async () => [] },
+    },
+  });
+
+  await handleMessage('College ke latest notices kya hain?', mockStudent);
+  assert.equal(noticeFilter.department, undefined);
+  assert.ok(noticeFilter.$and[0].$or[1].expiresAt.$gt instanceof Date);
 });
 

@@ -1,11 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   MessageSquare,
   Search,
   Settings,
   LogOut,
-  GraduationCap,
   X,
   MoreHorizontal,
   Pencil,
@@ -17,8 +16,11 @@ import {
   Info,
   ChevronUp,
 } from "lucide-react";
-import { Link, NavLink } from "react-router-dom";
+import CollegeLogo from "./CollegeLogo";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useUnreadContent } from "../context/UnreadContentContext";
+import UnreadBadge from "./UnreadBadge";
 
 const Sidebar = ({
   conversations = [],
@@ -32,8 +34,10 @@ const Sidebar = ({
   onRenameConversation,
   onOpenProfile,
   onOpenSettings,
+  historyError = false,
 }) => {
   const { user, logout } = useAuth();
+  const { unreadCounts } = useUnreadContent();
 
   const [menuId, setMenuId] = useState(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -117,13 +121,16 @@ const Sidebar = ({
   return (
     <>
       {isOpen && (
-        <div
+        <button
+          type="button"
           className="sidebar-overlay"
           onClick={onClose}
+          aria-label="Close chat menu"
         />
       )}
 
       <aside
+        id="chat-sidebar"
         ref={sidebarRef}
         className={`chat-sidebar ${
           isOpen ? "sidebar-open" : ""
@@ -132,13 +139,11 @@ const Sidebar = ({
         {/* Header */}
         <div className="sidebar-header">
           <div className="sidebar-brand">
-            <div className="sidebar-brand-icon">
-              <GraduationCap size={20} />
-            </div>
+            <CollegeLogo className="college-mark--sidebar" />
 
             <div className="sidebar-brand-text">
-              <strong>College AI Assistant</strong>
-              <span>Govt Polytechnic Unnao</span>
+              <strong>Your conversations</strong>
+              <span>Chat history</span>
             </div>
           </div>
 
@@ -188,6 +193,7 @@ const Sidebar = ({
           >
             <BookOpenCheck size={16} />
             <span>Assignments</span>
+            <UnreadBadge count={unreadCounts.assignments} label="assignments" />
           </Link>
           <Link
             to="/practicals"
@@ -196,6 +202,7 @@ const Sidebar = ({
           >
             <FlaskConical size={16} />
             <span>Practicals</span>
+            <UnreadBadge count={unreadCounts.practicals} label="practicals" />
           </Link>
         </div>
 
@@ -233,11 +240,12 @@ const Sidebar = ({
               <div className="empty-conversations">
                 <MessageSquare size={20} />
 
-                <p>No conversations yet</p>
+                <p>{historyError ? "Chat history is temporarily unavailable" : "No conversations yet"}</p>
 
                 <span>
-                  Start a new chat with your
-                  college assistant.
+                  {historyError
+                    ? "You can still start a chat with your college assistant."
+                    : "Start a new chat with your college assistant."}
                 </span>
               </div>
             ) : (
@@ -425,11 +433,11 @@ const Sidebar = ({
 
             <div className="sidebar-user-info">
               <strong className="sidebar-user-name">
-                {user?.name || "Student"}
+                {user?.name || user?.email || "Account"}
               </strong>
 
               <span className="sidebar-user-meta">
-                {user?.department || "CSE"}
+                {user?.department || "College account"}
                 {user?.semester ? ` • Sem ${user.semester}` : ""}
               </span>
             </div>

@@ -429,6 +429,98 @@ const demoUsers = {
   disabled1: { _id: 'd1', role: 'student', active: false },
 };
 
+test('user accounts support all roles and optional department association', () => {
+  const User = require('../models/User');
+  assert.deepEqual(User.schema.path('role').enumValues, ['student', 'teacher', 'admin']);
+  assert.equal(User.schema.path('department').isRequired, false);
+});
+
+test('auth.login issues JWTs for both student and admin accounts', async () => {
+  let role = 'student';
+  const signedPayloads = [];
+  const user = {
+    _id: { toString: () => `id-${role}` },
+    email: 'user@example.test',
+    role,
+    active: true,
+    isEmailVerified: true,
+    tokenVersion: 2,
+    async comparePassword(password) { return password === 'Password123!'; },
+  };
+  const controller = loadFresh('controllers/authController', {
+    paths: {
+      'models/User': {
+        findOne: (filter) => {
+          assert.deepEqual(filter, { email: 'user@example.test' });
+          return { select: async () => { user.role = role; return user; } };
+        },
+      },
+      'utils/jwt': { signToken: (payload) => { signedPayloads.push(payload); return `token-${role}`; } },
+      'services/departmentService': { isValidDepartment: async () => true },
+      'utils/otp': { generateOTP: () => '123456', hashOTP: () => 'hash', verifyOTP: () => false },
+      'services/emailService': { sendVerificationEmail: async () => {}, sendPasswordResetEmail: async () => {} },
+    },
+  });
+
+  for (role of ['student', 'admin']) {
+    const res = fakeRes();
+    let receivedError;
+    await controller.login(
+      { body: { email: ' USER@Example.test ', password: 'Password123!' } },
+      res,
+      (error) => { receivedError = error; }
+    );
+    assert.equal(receivedError, undefined);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.data.token, `token-${role}`);
+    assert.equal(signedPayloads.at(-1).role, role);
+  }
+});
+
+test('student registration accepts active departments added in the database', async () => {
+  let createdUser;
+  let sentEmail;
+  const user = {
+    email: 'student@example.test',
+    name: 'Test Student',
+    toJSON() { return this; },
+  };
+  const controller = loadFresh('controllers/authController', {
+    paths: {
+      'models/User': {
+        findOne: async () => null,
+        create: async (fields) => { createdUser = fields; return user; },
+      },
+      'services/departmentService': {
+        isValidDepartment: async (code) => ['CSE', 'ELECTRONICS', 'ALL', 'ME'].includes(code),
+      },
+      'utils/jwt': { signToken: () => 'unused' },
+      'utils/otp': { generateOTP: () => '123456', hashOTP: (otp) => `hashed:${otp}`, verifyOTP: () => false },
+      'services/emailService': {
+        sendVerificationEmail: async (payload) => { sentEmail = payload; },
+        sendPasswordResetEmail: async () => {},
+      },
+    },
+  });
+  const res = fakeRes();
+  let receivedError;
+
+  await controller.register({ body: {
+    name: 'Test Student',
+    email: 'student@example.test',
+    password: 'Password123!',
+    rollNumber: 'R-1',
+    department: 'me',
+    semester: 1,
+  } }, res, (error) => { receivedError = error; });
+
+  assert.equal(receivedError, undefined);
+  assert.equal(res.statusCode, 201);
+  assert.equal(createdUser.department, 'ME');
+  assert.equal(createdUser.role, 'student');
+  assert.equal(sentEmail.otp, '123456');
+});
+
 // Runs middleware and resolves with whatever next() was called with.
 const runMiddleware = (mw, req) => new Promise((resolve) => mw(req, fakeRes(), (err) => resolve(err)));
 
@@ -465,6 +557,7 @@ test('auth.authorize: role-based access', async () => {
   const adminOnly = authorize('admin');
   assert.equal(await runMiddleware(adminOnly, { user: { role: 'admin' } }), undefined);
   assert.equal((await runMiddleware(adminOnly, { user: { role: 'student' } })).statusCode, 403);
+  assert.equal((await runMiddleware(adminOnly, { user: { role: 'teacher' } })).statusCode, 403);
   assert.equal((await runMiddleware(adminOnly, {})).statusCode, 401); // not logged in at all
   assert.deepEqual(authorize('admin', 'student').allowedRoles, ['admin', 'student']);
 });
@@ -514,7 +607,7 @@ test('noticeService: anonymous visitors see current public notices and can filte
   });
   assert.deepEqual(buildNoticeFilter(undefined, { department: 'cse', status: 'expired' }, NOW), {
     $and: [
-      { department: 'CSE' },
+      { department: { $in: ['CSE', 'ALL'] } },
       ACTIVE,
     ],
   });

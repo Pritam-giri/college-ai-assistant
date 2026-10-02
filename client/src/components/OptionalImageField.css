@@ -1,0 +1,74 @@
+.optional-image-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.optional-image-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.optional-image-controls input[type="file"] {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--admin-text-muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+.optional-image-controls input[type="file"]::file-selector-button {
+  margin-right: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  color: var(--admin-text-main);
+  background: var(--admin-card-bg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.optional-image-action {
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.optional-image-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--admin-text-muted);
+  font-size: 11px;
+}
+
+.optional-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  color: var(--admin-text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.optional-image-preview img {
+  display: block;
+  width: 100px;
+  height: 68px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  object-fit: contain;
+  background: var(--admin-table-hover);
+}
+
+.optional-image-error {
+  color: var(--admin-danger);
+  font-size: 12px;
+}

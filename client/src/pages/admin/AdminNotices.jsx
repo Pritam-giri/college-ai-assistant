@@ -147,7 +147,11 @@ const AdminNotices = () => {
     payload.append("category", formData.category);
     payload.append("publishedAt", new Date(formData.publishedAt).toISOString());
     payload.append("expiresAt", formData.expiresAt ? new Date(formData.expiresAt).toISOString() : "");
-    if (attachmentFile) payload.append("attachment", attachmentFile);
+    if (attachmentFile) {
+      const extension = attachmentFile.name.split(".").pop()?.toLowerCase();
+      const imageExtensions = new Set(["jpg", "jpeg", "png", "webp"]);
+      payload.append(imageExtensions.has(extension) ? "image" : "attachment", attachmentFile);
+    }
     const originalAttachmentUrl = editingNotice?.attachment?.url || "";
     if ((editingNotice && formData.attachmentUrl.trim() !== originalAttachmentUrl) || (!editingNotice && formData.attachmentUrl.trim())) {
       payload.append("attachmentUrl", formData.attachmentUrl.trim());
@@ -567,10 +571,10 @@ const AdminNotices = () => {
                 <input
                   type="file"
                   className="admin-form-input"
-                  accept=".pdf,.docx,.xlsx,.pptx"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf,.docx,.xlsx,.pptx,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation"
                   onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)}
                 />
-                <span className="admin-form-hint">PDF, DOCX, XLSX or PPTX, up to 10 MB. Choose a file or a link.</span>
+                <span className="admin-form-hint">JPEG, PNG, WebP, PDF, DOCX, XLSX or PPTX, up to 10 MB. Choose a file or a link.</span>
               </div>
             </div>
           </form>

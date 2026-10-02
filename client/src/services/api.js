@@ -2,7 +2,7 @@ import axios from "axios";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  (import.meta.env.DEV ? "/api" : "http://localhost:5000/api");
 
 const api = axios.create({
   baseURL: API_URL,
@@ -10,6 +10,27 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+function academicImagePayload(payload) {
+  const { imageFile, attachmentFile, removeImage, ...fields } = payload;
+  if (!imageFile && !attachmentFile && !removeImage) return fields;
+
+  const formData = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    formData.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+  });
+  if (imageFile) formData.append("image", imageFile);
+  if (attachmentFile) formData.append("attachment", attachmentFile);
+  if (removeImage) formData.append("removeImage", "true");
+  return formData;
+}
+
+function academicImageConfig(payload) {
+  return payload instanceof FormData
+    ? { headers: { "Content-Type": "multipart/form-data" } }
+    : undefined;
+}
 
 /* =========================
    REQUEST INTERCEPTOR
@@ -165,6 +186,14 @@ export const noticeAPI = {
     api.delete(`/notices/${id}`),
 };
 
+export const contentReadAPI = {
+  getUnreadCounts: () =>
+    api.get('/notifications/unread-counts'),
+
+  markRead: (contentType, contentId) =>
+    api.post(`/notifications/${contentType}/${contentId}/read`),
+};
+
 /* =========================
    FACULTY
 ========================= */
@@ -218,11 +247,15 @@ export const syllabusAPI = {
   getOne: (id) =>
     api.get(`/syllabus/${id}`),
 
-  create: (data) =>
-    api.post("/syllabus", data),
+  create: (data) => {
+    const payload = academicImagePayload(data);
+    return api.post("/syllabus", payload, academicImageConfig(payload));
+  },
 
-  update: (id, data) =>
-    api.put(`/syllabus/${id}`, data),
+  update: (id, data) => {
+    const payload = academicImagePayload(data);
+    return api.put(`/syllabus/${id}`, payload, academicImageConfig(payload));
+  },
 
   delete: (id) =>
     api.delete(`/syllabus/${id}`),
@@ -302,11 +335,15 @@ export const practicalAPI = {
   getOne: (id) =>
     api.get(`/practicals/${id}`),
 
-  create: (data) =>
-    api.post("/practicals", data),
+  create: (data) => {
+    const payload = academicImagePayload(data);
+    return api.post("/practicals", payload, academicImageConfig(payload));
+  },
 
-  update: (id, data) =>
-    api.put(`/practicals/${id}`, data),
+  update: (id, data) => {
+    const payload = academicImagePayload(data);
+    return api.put(`/practicals/${id}`, payload, academicImageConfig(payload));
+  },
 
   delete: (id) =>
     api.delete(`/practicals/${id}`),
@@ -323,11 +360,15 @@ export const assignmentAPI = {
   getOne: (id) =>
     api.get(`/assignments/${id}`),
 
-  create: (data) =>
-    api.post("/assignments", data),
+  create: (data) => {
+    const payload = academicImagePayload(data);
+    return api.post("/assignments", payload, academicImageConfig(payload));
+  },
 
-  update: (id, data) =>
-    api.put(`/assignments/${id}`, data),
+  update: (id, data) => {
+    const payload = academicImagePayload(data);
+    return api.put(`/assignments/${id}`, payload, academicImageConfig(payload));
+  },
 
   delete: (id) =>
     api.delete(`/assignments/${id}`),

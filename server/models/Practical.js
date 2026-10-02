@@ -51,6 +51,22 @@ const practicalSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    attachment: {
+      url: { type: String, trim: true },
+      publicId: { type: String, trim: true },
+      resourceType: { type: String, trim: true, default: 'raw' },
+      mimeType: { type: String, trim: true },
+      originalName: { type: String, trim: true },
+      size: { type: Number },
+    },
+    image: {
+      url: { type: String, trim: true },
+      publicId: { type: String, trim: true },
+      resourceType: { type: String, trim: true },
+      mimeType: { type: String, trim: true },
+      fileName: { type: String, trim: true },
+      size: { type: Number },
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

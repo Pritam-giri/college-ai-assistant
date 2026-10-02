@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   User,
-  GraduationCap,
-  Cpu,
   UserRound,
   CalendarDays,
   ClipboardList,
@@ -10,32 +9,18 @@ import {
   Check,
   RotateCcw,
   AlertCircle,
-  Sun,
-  Moon,
-  Monitor,
   Bell,
-  X,
   ExternalLink,
+  X,
 } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
-import { useTheme } from "../context/ThemeContext";
+import { useAuth } from "../context/AuthContext";
 import { noticeAPI } from "../services/api";
+import { useUnreadContent } from "../context/UnreadContentContext";
+import UnreadBadge from "./UnreadBadge";
+import MediaAction from "./MediaAction";
 import { safeMarkdownUrl } from "../safeUrl";
-
-function CollegeMark({ compact = false }) {
-  return (
-    <span
-      className={`college-mark${compact ? " college-mark--compact" : ""}`}
-      aria-hidden="true"
-    >
-      <GraduationCap className="college-mark-cap" />
-      <span className="college-mark-circuit">
-        <Cpu />
-      </span>
-    </span>
-  );
-}
+import CollegeLogo from "./CollegeLogo";
 
 /* =========================================================
    MARKDOWN RENDERER
@@ -328,12 +313,101 @@ const ChatWindow = ({
   onSuggestionClick,
   onRetry,
 }) => {
-  const { user } = useAuth();
   const { showTimestamps, autoScroll } = useSettings();
-  const { theme, setTheme } = useTheme();
+  const { unreadCounts } = useUnreadContent();
+  const { user } = useAuth();
+  const department = String(user?.department || "ALL").trim().toUpperCase();
+  const departmentName = department === "CSE"
+    ? "CSE"
+    : department === "ELECTRONICS"
+      ? "Electronics"
+      : "department";
+  const welcomeMessage = "What would you like to know?";
+  const [typedWelcomeMessage, setTypedWelcomeMessage] = useState(() => {
+    const reduceMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    return reduceMotion ? welcomeMessage : "";
+  });
 
   const messagesEndRef = useRef(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [noticesLoading, setNoticesLoading] = useState(true);
+  const [notices, setNotices] = useState([]);
+  const [noticesUnavailable, setNoticesUnavailable] = useState(false);
+  const [noticesOpen, setNoticesOpen] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setTypedWelcomeMessage(welcomeMessage);
+      return undefined;
+    }
+
+    let characterIndex = 0;
+    let timeoutId;
+    const typeNextCharacter = () => {
+      characterIndex += 1;
+      setTypedWelcomeMessage(welcomeMessage.slice(0, characterIndex));
+      if (characterIndex < welcomeMessage.length) {
+        timeoutId = window.setTimeout(typeNextCharacter, 50);
+      }
+    };
+
+    timeoutId = window.setTimeout(typeNextCharacter, 50);
+    return () => window.clearTimeout(timeoutId);
+  }, [welcomeMessage]);
+
+  useEffect(() => {
+    let active = true;
+    const department = user?.department;
+    const params = department && department !== "ALL"
+      ? { department, limit: 20 }
+      : { limit: 20 };
+
+    noticeAPI.getAll(params)
+      .then((response) => {
+        if (!active) return;
+        const rows = response?.data?.data;
+        const fetched = (Array.isArray(rows) ? rows : []).slice().sort((a, b) =>
+          new Date(b.publishedAt || b.createdAt || 0).getTime() - new Date(a.publishedAt || a.createdAt || 0).getTime()
+        );
+        const departmentCode = String(department || "").toUpperCase();
+        const noticeDepartment = (notice) =>
+          String(notice.department?.code || notice.departmentCode || notice.department || "").toUpperCase();
+        const isCollegeWide = (notice) => {
+          const code = noticeDepartment(notice);
+          return !code || code === "ALL" || code === "COLLEGE" || code === "COLLEGE-WIDE";
+        };
+        const collegeWide = fetched.filter(isCollegeWide);
+        const forDepartment = fetched.filter((notice) =>
+          noticeDepartment(notice) === departmentCode || notice.department?.name === department
+        );
+        const departmentNotices = fetched.filter((notice) => !isCollegeWide(notice));
+        const preferred = departmentCode && departmentCode !== "ALL"
+          ? [...forDepartment.slice(0, 2), ...collegeWide.slice().sort((a, b) => Number(Boolean(b.isImportant)) - Number(Boolean(a.isImportant))).slice(0, 2)]
+          : [...collegeWide.slice().sort((a, b) => Number(Boolean(b.isImportant)) - Number(Boolean(a.isImportant))).slice(0, 2), ...departmentNotices.slice(0, 2)];
+        const selected = new Map(preferred.map((notice) => [notice._id || notice.id || notice.title, notice]));
+        for (const notice of fetched) {
+          if (selected.size >= 4) break;
+          selected.set(notice._id || notice.id || notice.title, notice);
+        }
+        setNotices([...selected.values()].sort((a, b) =>
+          new Date(b.publishedAt || b.createdAt || 0).getTime() - new Date(a.publishedAt || a.createdAt || 0).getTime()
+        ));
+        setNoticesUnavailable(false);
+        setNoticesLoading(false);
+      })
+      .catch((requestError) => {
+        if (!active) return;
+        console.warn("Failed to load recent notices", {
+          status: requestError.response?.status,
+          message: requestError.response?.data?.message || requestError.message,
+        });
+        setNoticesUnavailable(true);
+        setNoticesLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [user?.department]);
 
   useEffect(() => {
     if (autoScroll) {
@@ -342,6 +416,20 @@ const ChatWindow = ({
       });
     }
   }, [messages, loading, autoScroll]);
+
+  useEffect(() => {
+    if (!noticesOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setNoticesOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [noticesOpen]);
 
   const copyMessage = async (text, id) => {
     try {
@@ -365,68 +453,17 @@ const ChatWindow = ({
     }
   };
 
-  const [noticesModal, setNoticesModal] = useState({
-    open: false,
-    loading: false,
-    notices: [],
-    error: null,
-  });
-
-  useEffect(() => {
-    if (!noticesModal.open) return;
-    const handleEsc = (e) => {
-      if (e.key === "Escape") {
-        setNoticesModal((prev) => ({ ...prev, open: false }));
-      }
-    };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [noticesModal.open]);
-
-  const handleOpenRecentNotices = async () => {
-    setNoticesModal({ open: true, loading: true, notices: [], error: null });
-    try {
-      const res = await noticeAPI.getAll({
-        department: user?.department || "ALL",
-        limit: 5,
-      });
-      const data = res.data?.data?.notices || res.data?.data || res.data || [];
-      const list = Array.isArray(data) ? data.slice(0, 5) : [];
-      setNoticesModal({ open: true, loading: false, notices: list, error: null });
-    } catch {
-      console.error("Failed to load recent notices:");
-      setNoticesModal({
-        open: true,
-        loading: false,
-        notices: [],
-        error: "Unable to load recent notices. Please try again.",
-      });
-    }
+  const formatNoticeDate = (value) => {
+    if (!value) return "Date unavailable";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? "Date unavailable" : parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  const normalizedDepartment = String(user?.department || '').trim().toUpperCase();
-  const hodDepartment = normalizedDepartment === 'CSE'
-    ? 'CSE'
-    : normalizedDepartment === 'ELECTRONICS'
-      ? 'Electronics'
-      : '';
-
   const suggestions = [
-    {
-      question: hodDepartment ? `Who is the ${hodDepartment} HOD?` : 'Who is our HOD?',
-      category: "Faculty information",
-      icon: UserRound,
-    },
-    {
-      question: "Show my timetable",
-      category: "Personal schedule",
-      icon: CalendarDays,
-    },
-    {
-      question: "What are my assignments?",
-      category: "Coursework",
-      icon: ClipboardList,
-    },
+    { question: `What are the latest ${departmentName} notices?`, category: "Department notices", icon: Bell },
+    { question: "What are the latest college notices?", category: "College-wide notices", icon: ClipboardList },
+    { question: `Show me the ${departmentName} timetable.`, category: "Academic information", icon: CalendarDays },
+    { question: `Who are the ${departmentName} faculty members?`, category: "Department information", icon: UserRound },
   ];
 
   return (
@@ -434,15 +471,11 @@ const ChatWindow = ({
       {/* Header */}
       <header className="chat-header">
           <div className="chat-header-info">
-          <CollegeMark compact />
+          <CollegeLogo className="college-mark--compact" />
 
           <div>
-            <h1>College AI Assistant</h1>
-            <span>
-              {user?.department
-                ? `${user.department} - Government Polytechnic Unnao`
-                : "Government Polytechnic Unnao"}
-            </span>
+            <h1>College Chatbot</h1>
+            <span>AI Assistant for Government Polytechnic Unnao</span>
           </div>
         </div>
 
@@ -450,82 +483,114 @@ const ChatWindow = ({
           <button
             type="button"
             className="header-action-button"
-            onClick={handleOpenRecentNotices}
-            title="Recent Notices & Announcements"
-            id="recent-notices-btn"
+            aria-haspopup="dialog"
+            aria-expanded={noticesOpen}
+            aria-controls="recent-notices-modal"
+            onClick={() => setNoticesOpen(true)}
           >
-            <div className="header-action-icon-wrap">
-              <Bell size={15} className="header-action-bell" />
-            </div>
+            <span className="header-action-icon-wrap"><Bell className="header-action-bell" size={16} /></span>
             <span className="header-action-text">Recent Notices</span>
+            <UnreadBadge count={unreadCounts.notices} label="notices" floating />
           </button>
-
-          <div className="header-theme-toggle" title="Switch theme">
-            <button
-              type="button"
-              className={theme === "light" ? "active" : ""}
-              onClick={() => setTheme("light")}
-              title="Light theme"
-              aria-label="Light theme"
-            >
-              <Sun size={14} />
-            </button>
-            <button
-              type="button"
-              className={theme === "dark" ? "active" : ""}
-              onClick={() => setTheme("dark")}
-              title="Dark theme"
-              aria-label="Dark theme"
-            >
-              <Moon size={14} />
-            </button>
-            <button
-              type="button"
-              className={theme === "system" ? "active" : ""}
-              onClick={() => setTheme("system")}
-              title="System theme"
-              aria-label="System theme"
-            >
-              <Monitor size={14} />
-            </button>
-          </div>
-
         </div>
       </header>
+
+      {noticesOpen && (
+        <div className="notices-modal-backdrop" role="presentation" onClick={() => setNoticesOpen(false)}>
+          <section
+            className="notices-modal-dialog"
+            id="recent-notices-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="recent-notices-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="notices-modal-header">
+              <div className="notices-modal-title">
+                <Bell size={18} aria-hidden="true" />
+                <h3 id="recent-notices-title">Recent Notices</h3>
+              </div>
+              <button type="button" className="notices-modal-close" onClick={() => setNoticesOpen(false)} aria-label="Close recent notices">
+                <X size={18} />
+              </button>
+            </header>
+            <div className="notices-modal-body">
+              {noticesLoading ? (
+                <p className="recent-notices-empty">Loading recent notices…</p>
+              ) : notices.length > 0 ? (
+                <div className="notices-list-container">
+                  {notices.map((notice) => {
+                    const rawDepartment = notice.department?.name || notice.department?.code || notice.departmentName || notice.departmentCode || (typeof notice.department === "string" ? notice.department : "");
+                    const departmentLabel = !rawDepartment || String(rawDepartment).toUpperCase() === "ALL" ? "College-wide" : rawDepartment;
+                    return (
+                      <article className="notice-item-card" key={notice._id || notice.id || notice.title}>
+                        <div className="notice-item-top">
+                          <span className="notice-item-tag">{departmentLabel}</span>
+                          <span className="notice-item-dot">·</span>
+                          <span className="notice-item-date">{formatNoticeDate(notice.publishedAt || notice.createdAt)}</span>
+                        </div>
+                        <h4 className="notice-item-title">
+                          <Link
+                            to={`/notices/${notice._id || notice.id}`}
+                            className="notice-item-open"
+                          >
+                            {notice.title || "College notice"}
+                          </Link>
+                        </h4>
+                        {notice.body && <p className="notice-item-body">{notice.body}</p>}
+                        <div className="notice-item-media-actions">
+                          <MediaAction url={notice.attachment?.url} mimeType={notice.attachment?.mimeType} fileName={notice.attachment?.originalName} />
+                          <MediaAction url={notice.image?.url} mimeType={notice.image?.mimeType} fileName={notice.image?.originalName} />
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="recent-notices-empty">
+                  {noticesUnavailable ? "Recent notices are temporarily unavailable." : "No recent notices available."}
+                </p>
+              )}
+            </div>
+            <footer className="notices-modal-footer">
+              <button type="button" className="notices-modal-btn" onClick={() => setNoticesOpen(false)}>Close</button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="messages-container">
         {messages.length === 0 ? (
           <div className="welcome-screen">
-            <CollegeMark />
+            <CollegeLogo />
 
-            <h2>College AI Assistant</h2>
-
-            <span className="welcome-institution">Government Polytechnic Unnao</span>
-
-            <p>How can I help you today?</p>
-
-            <div className="suggestions">
-              {suggestions.map((suggestion) => {
-                const SuggestionIcon = suggestion.icon;
-                return (
-                  <button
-                    key={suggestion.question}
-                    type="button"
-                    className="suggestion-card"
-                    onClick={() => onSuggestionClick?.(suggestion.question)}
-                  >
-                    <span className="suggestion-icon" aria-hidden="true">
-                      <SuggestionIcon size={17} strokeWidth={1.8} />
-                    </span>
-                    <span className="suggestion-copy">
-                      <span className="suggestion-category">{suggestion.category}</span>
-                      <span className="suggestion-question">{suggestion.question}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <section className="suggested-questions" aria-label="Suggested questions">
+              <p className="welcome-prompt">
+                {typedWelcomeMessage}
+              </p>
+              <div className="suggestions">
+                {suggestions.map((suggestion) => {
+                  const SuggestionIcon = suggestion.icon;
+                  return (
+                    <button
+                      key={suggestion.question}
+                      type="button"
+                      className="suggestion-card"
+                      onClick={() => onSuggestionClick?.(suggestion.question)}
+                    >
+                      <span className="suggestion-icon" aria-hidden="true">
+                        <SuggestionIcon size={17} strokeWidth={1.8} />
+                      </span>
+                      <span className="suggestion-copy">
+                        <span className="suggestion-category">{suggestion.category}</span>
+                        <span className="suggestion-question">{suggestion.question}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
           </div>
         ) : (
           <div className="messages-list">
@@ -557,7 +622,7 @@ const ChatWindow = ({
                     ) : isErrorMsg ? (
                       <AlertCircle size={18} />
                     ) : (
-                      <GraduationCap size={18} />
+                      <CollegeLogo className="college-mark--message" />
                     )}
                   </div>
 
@@ -658,7 +723,7 @@ const ChatWindow = ({
             {loading && (
               <div className="message-row assistant-message">
                 <div className="message-avatar">
-                  <GraduationCap size={18} />
+                  <CollegeLogo className="college-mark--message" />
                 </div>
 
                 <div className="message-content">
@@ -678,72 +743,6 @@ const ChatWindow = ({
         )}
       </div>
 
-      {/* Recent Notices Modal */}
-      {noticesModal.open && (
-        <div className="notices-modal-backdrop" onClick={() => setNoticesModal({ ...noticesModal, open: false })}>
-          <div className="notices-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="notices-modal-header">
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Bell size={18} />
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Recent College Notices</h3>
-              </div>
-              <button
-                type="button"
-                className="notices-modal-close"
-                onClick={() => setNoticesModal({ ...noticesModal, open: false })}
-                aria-label="Close recent college notices"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="notices-modal-body">
-              {noticesModal.loading ? (
-                <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)" }}>
-                  <div className="loading-spinner" style={{ margin: "0 auto 10px auto" }} />
-                  <p>Loading latest notices...</p>
-                </div>
-              ) : noticesModal.error ? (
-                <div className="academic-alert error" style={{ margin: 16 }}>
-                  <AlertCircle size={16} />
-                  <span>{noticesModal.error}</span>
-                </div>
-              ) : noticesModal.notices.length === 0 ? (
-                <div style={{ padding: 36, textAlign: "center", color: "var(--text-muted)" }}>
-                  <Bell size={28} style={{ opacity: 0.5, marginBottom: 8 }} />
-                  <p style={{ margin: 0, fontWeight: 600 }}>No recent notices are available.</p>
-                </div>
-              ) : (
-                <div className="notices-list-container">
-                  {noticesModal.notices.map((n) => {
-                    const deptLabel = n.department === "ALL" ? "All Departments" : n.department || "General";
-                    const dateFormatted = new Date(n.publishedAt || n.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    });
-
-                    return (
-                      <article key={n._id} className="notice-item-card">
-                        <div className="notice-item-top">
-                          <span className="notice-item-tag">{deptLabel}</span>
-                          <span className="notice-item-dot">•</span>
-                          <span className="notice-item-date">{dateFormatted}</span>
-                          {n.category && (
-                            <span className="notice-item-cat">{n.category}</span>
-                          )}
-                        </div>
-                        <h4 className="notice-item-title">{n.title}</h4>
-                        {n.body && <p className="notice-item-body">{n.body}</p>}
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 };

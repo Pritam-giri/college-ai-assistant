@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" rx="6" fill="#0f172a" />
-  <!-- Academic Cap / Mortarboard icon -->
-  <path d="M16 8L5 13.5L16 19L27 13.5L16 8Z" fill="#ffffff" />
-  <path d="M8 15V21C8 23.2 11.6 25 16 25C20.4 25 24 21.2 24 19V15L16 19L8 15Z" fill="#94a3b8" />
-  <!-- Tassel -->
-  <path d="M25 14.5V20.5" stroke="#34a88a" stroke-width="1.5" stroke-linecap="round" />
-  <circle cx="25" cy="21.5" r="1" fill="#34a88a" />
-</svg>

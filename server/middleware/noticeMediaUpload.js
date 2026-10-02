@@ -22,11 +22,23 @@ const upload = multer({
   limits: { fileSize: ATTACHMENT_LIMIT, files: 2, fields: 20, fieldSize: 1024 * 1024 },
   fileFilter(req, file, callback) {
     const extension = path.extname(file.originalname || '').toLowerCase();
+    if (process.env.NODE_ENV !== 'production') console.info('[Media upload] Incoming multipart file', {
+      route: `${req.baseUrl || ''}${req.path || ''}`,
+      fieldName: file.fieldname,
+      fileName: path.basename(file.originalname || 'unnamed').slice(0, 160),
+      mimeType: file.mimetype || null,
+      extension,
+    });
+    // Browsers can send an empty or generic MIME type for a valid file. Use
+    // the field and extension to select the validation path, then verify the
+    // actual bytes below before accepting or storing it.
     const allowed = file.fieldname === 'image'
-      ? imageTypes[extension] === file.mimetype
-      : file.fieldname === 'attachment' && documentTypes[extension]?.includes(file.mimetype);
+      ? Object.hasOwn(imageTypes, extension)
+      : file.fieldname === 'attachment' && (
+        Object.hasOwn(imageTypes, extension) || Object.hasOwn(documentTypes, extension)
+      );
     if (!allowed) {
-      callback(new ApiError(400, 'Unsupported notice media type. Use JPEG, PNG, WebP, PDF, DOCX, XLSX, or PPTX.'));
+      callback(new ApiError(400, 'Unsupported upload type. Use JPEG, PNG, WebP, PDF, DOCX, XLSX, or PPTX.'));
       return;
     }
     callback(null, true);
@@ -44,17 +56,18 @@ async function validateSignatures(req) {
   for (const file of files) {
     const extension = path.extname(file.originalname || '').toLowerCase();
     if (file.fieldname === 'image' && file.size > IMAGE_LIMIT) {
-      throw new ApiError(413, 'Notice images must be 5 MB or smaller.');
+      throw new ApiError(413, 'Images must be 5 MB or smaller.');
     }
     const detected = await fileTypeFromBuffer(file.buffer);
     const isImage = file.fieldname === 'image';
-    const expectedMime = isImage
-      ? imageTypes[extension]
-      : documentTypes[extension]?.[0];
+    const expectedMime = imageTypes[extension] || documentTypes[extension]?.[0];
     const isOfficeZip = ['.docx', '.xlsx', '.pptx'].includes(extension) && detected?.mime === 'application/zip';
     if (!detected || (!isOfficeZip && detected.mime !== expectedMime)) {
       throw new ApiError(400, 'The uploaded file content does not match its allowed file type.');
     }
+    // Store a canonical MIME derived from the validated file content/allowed
+    // extension instead of preserving a missing or incorrect browser value.
+    file.mimetype = expectedMime;
     file.safeOriginalName = String(file.originalname || 'attachment')
       .replace(/[\\/\0]/g, '')
       .slice(0, 160);
@@ -64,13 +77,39 @@ async function validateSignatures(req) {
 function noticeMediaUpload(req, res, next) {
   upload(req, res, (uploadError) => {
     if (uploadError) {
+      if (process.env.NODE_ENV !== 'production') console.error('[Media upload] Multer rejected request', {
+        route: `${req.baseUrl || ''}${req.path || ''}`,
+        name: uploadError.name || 'Error',
+        message: uploadError.message,
+        code: uploadError.code || null,
+      });
       if (uploadError instanceof multer.MulterError && uploadError.code === 'LIMIT_FILE_SIZE') {
-        return next(new ApiError(413, 'Notice attachments must be 10 MB or smaller.'));
+      return next(new ApiError(413, 'Uploaded files must be 10 MB or smaller.'));
       }
       return next(uploadError);
     }
-    validateSignatures(req).then(() => next()).catch(next);
+    const files = [ ...(req.files?.image || []), ...(req.files?.attachment || []) ];
+    if (process.env.NODE_ENV !== 'production') console.info('[Media upload] Multer received files', {
+      route: `${req.baseUrl || ''}${req.path || ''}`,
+      files: files.map((file) => ({
+        fieldName: file.fieldname,
+        fileName: file.safeOriginalName || path.basename(file.originalname || 'unnamed').slice(0, 160),
+        mimeType: file.mimetype || null,
+        size: file.size,
+      })),
+    });
+    validateSignatures(req)
+      .then(() => next())
+      .catch((error) => {
+        if (process.env.NODE_ENV !== 'production') console.error('[Media upload] File signature validation failed', {
+          route: `${req.baseUrl || ''}${req.path || ''}`,
+          name: error.name || 'Error',
+          message: error.message,
+          files: files.map((file) => ({ fieldName: file.fieldname, fileName: file.safeOriginalName || file.originalname, mimeType: file.mimetype, size: file.size })),
+        });
+        next(error);
+      });
   });
 }
 
-module.exports = { noticeMediaUpload, IMAGE_LIMIT, ATTACHMENT_LIMIT };
+module.exports = { noticeMediaUpload, mediaUpload: noticeMediaUpload, IMAGE_LIMIT, ATTACHMENT_LIMIT };

@@ -123,7 +123,16 @@ const chat = asyncHandler(async (req, res) => {
         department: user.department || 'ALL',
       };
     } else {
-      throw new ApiError(502, 'The AI service is temporarily unavailable. Please try again shortly.');
+      const isProduction = process.env.NODE_ENV === 'production';
+      const providerName = error.isAIProviderError ? 'xAI/Grok' : 'AI provider';
+      const apiError = new ApiError(
+        502,
+        isProduction
+          ? 'The AI service is temporarily unavailable. Please try again shortly.'
+          : `${providerName} request failed: ${error.message || 'Unknown provider error.'}`
+      );
+      apiError.isAIProviderError = true;
+      throw apiError;
     }
   }
 
@@ -172,6 +181,7 @@ const chat = asyncHandler(async (req, res) => {
     success: true,
     data: {
       reply: result.reply,
+      answer: result.reply,
       department:
         result.department ||
         user.department ||

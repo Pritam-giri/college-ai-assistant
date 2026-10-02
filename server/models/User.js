@@ -148,6 +148,8 @@ userSchema.methods.toJSON = function () {
   return user;
 };
 
-departmentPlugin(userSchema);
+// Students can be associated with a department, while college-wide staff
+// accounts (including the seeded administrator) may have no department.
+departmentPlugin(userSchema, { required: false });
 
 module.exports = mongoose.model('User', userSchema);

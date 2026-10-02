@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import CollegeLogo from "../components/CollegeLogo";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Eye,
@@ -14,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { departmentAPI } from "../services/api";
 
 const PASSWORD_RULES = {
   length: (password) => password.length >= 8,
@@ -28,6 +30,11 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export default function Register() {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const [departments, setDepartments] = useState([
+    { code: "CSE", name: "CSE" },
+    { code: "ELECTRONICS", name: "Electronics" },
+    { code: "ALL", name: "All Departments" },
+  ]);
 
   const [form, setForm] = useState({
     name: "",
@@ -42,6 +49,23 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    departmentAPI.getAll()
+      .then((response) => {
+        const activeDepartments = response.data?.data;
+        if (Array.isArray(activeDepartments) && activeDepartments.length) {
+          setDepartments(activeDepartments);
+          setForm((current) => activeDepartments.some((department) => department.code === current.department)
+            ? current
+            : { ...current, department: activeDepartments[0].code });
+        }
+      })
+      .catch(() => {
+        // Keep the initial CSE, Electronics, and college-wide choices visible
+        // if the API is temporarily unavailable.
+      });
+  }, []);
 
   const passwordChecks = useMemo(
     () => ({
@@ -140,11 +164,9 @@ export default function Register() {
     <main className="auth-page register-page">
       <section className="auth-card register-card">
         <div className="auth-brand">
-          <div className="brand-icon">
-            <GraduationCap size={20} />
-          </div>
+          <CollegeLogo className="college-mark--register" />
           <div>
-            <h1>College AI Assistant</h1>
+            <h1>College Chatbot</h1>
             <p>Student Registration</p>
           </div>
         </div>
@@ -291,8 +313,11 @@ export default function Register() {
                   disabled={loading}
                   required
                 >
-                  <option value="CSE">CSE</option>
-                  <option value="ELECTRONICS">Electronics</option>
+                  {departments.map((department) => (
+                    <option key={department.code} value={department.code}>
+                      {department.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

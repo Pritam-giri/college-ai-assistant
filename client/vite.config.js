@@ -5,14 +5,10 @@ import process from 'node:process'
 const publicRoutes = [
   '/',
   '/about',
+  '/help',
   '/departments',
   '/departments/cse',
   '/departments/electronics',
-  '/notices',
-  '/faculty',
-  '/timetable',
-  '/admissions',
-  '/contact',
   '/privacy-policy',
   '/terms-and-conditions',
 ]
@@ -55,5 +51,13 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), seoFilesPlugin(siteUrl)],
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:5000',
+          changeOrigin: true,
+        },
+      },
+    },
   }
 })

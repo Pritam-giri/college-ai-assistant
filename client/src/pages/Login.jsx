@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Eye, EyeOff, LockKeyhole, Mail, GraduationCap, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Mail, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import CollegeLogo from "../components/CollegeLogo";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -57,7 +58,10 @@ export default function Login() {
         return;
       }
 
-      const requestedPath = location.state?.from?.pathname;
+      const requestedLocation = location.state?.from;
+      const requestedPath = requestedLocation
+        ? `${requestedLocation.pathname || "/chatbot"}${requestedLocation.search || ""}`
+        : null;
       const defaultPath = result?.user?.role === "admin" ? "/admin" : "/chatbot";
       navigate(requestedPath || defaultPath, { replace: true });
     } catch (err) {
@@ -82,12 +86,10 @@ export default function Login() {
     <main className="auth-page">
       <section className="auth-card">
         <div className="auth-brand">
-          <div className="brand-icon">
-            <GraduationCap size={22} />
-          </div>
+          <CollegeLogo className="college-mark--login" />
 
           <div>
-            <h1>College AI Assistant</h1>
+            <h1>College Chatbot</h1>
             <p>Government Polytechnic Unnao</p>
           </div>
         </div>

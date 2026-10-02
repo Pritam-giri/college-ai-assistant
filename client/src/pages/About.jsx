@@ -1,8 +1,10 @@
 import { useEffect } from "react";
-import { Link } from "react-router-dom";
 import PublicAppLink from "../components/PublicAppLink";
+import { PublicSiteFooter, PublicSiteHeader } from "../components/PublicSiteChrome";
+import CollegeLogo from "../components/CollegeLogo";
+import { CONTACT_EMAIL, CONTACT_LINKS } from "../config/contact";
+import "./Home.css";
 import {
-  GraduationCap,
   BookOpen,
   Calendar,
   Users,
@@ -17,20 +19,19 @@ import {
 
 export default function About() {
   useEffect(() => {
-    document.title = "About | College AI Assistant";
+    document.title = "About | College Chatbot";
   }, []);
 
   return (
     <div className="legal-page about-page">
+      <PublicSiteHeader />
       <div className="legal-container">
         <header className="legal-header">
           <PublicAppLink className="legal-back-link" back />
           <div className="legal-brand">
-            <div className="legal-icon">
-              <GraduationCap size={22} />
-            </div>
+            <CollegeLogo className="college-mark--about" />
             <div>
-              <h1>About College AI Assistant</h1>
+              <h1>About College Chatbot</h1>
               <p>Government Polytechnic Unnao</p>
             </div>
           </div>
@@ -40,7 +41,7 @@ export default function About() {
           <section className="legal-section">
             <h2>Project Overview</h2>
             <p>
-              <strong>PritamChatbot</strong> is an independent student project by Pritam Giri. It is an AI Assistant for Government Polytechnic Unnao information, and is not an official college service.
+              <strong>College Chatbot</strong> is an independent student project by Pritam Giri. It is an AI Assistant for Government Polytechnic Unnao information, and is not an official college service.
             </p>
             <p>
               The project is designed to organize verified timetables, syllabus details, faculty records, notices, laboratory practicals, and assignments when those records are available. It does not invent missing college information.
@@ -133,7 +134,7 @@ export default function About() {
 
                 <div className="developer-links" style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "12px" }}>
                   <a
-                    href="mailto:pritamgirics@gmail.com"
+                    href={CONTACT_LINKS.email}
                     className="developer-contact-link"
                     style={{
                       display: "inline-flex",
@@ -149,11 +150,11 @@ export default function About() {
                     }}
                   >
                     <Mail size={14} />
-                    <span>pritamgirics@gmail.com</span>
+                    <span>{CONTACT_EMAIL}</span>
                   </a>
 
                   <a
-                    href="https://www.linkedin.com/in/pritam-giri"
+                    href={CONTACT_LINKS.linkedin}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="developer-contact-link"
@@ -177,7 +178,7 @@ export default function About() {
                   </a>
 
                   <a
-                    href="https://github.com/Pritam-giri"
+                    href={CONTACT_LINKS.github}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="developer-contact-link"
@@ -221,15 +222,8 @@ export default function About() {
           </section>
         </main>
 
-        <footer className="legal-footer">
-          <p>&copy; {new Date().getFullYear()} College AI Assistant. Government Polytechnic Unnao.</p>
-          <div className="legal-footer-links">
-            <Link className="institutional-legal-link" to="/privacy-policy">Privacy Policy</Link>
-            <Link className="institutional-legal-link" to="/terms-and-conditions">Terms &amp; Conditions</Link>
-            <Link to="/">Assistant Home</Link>
-          </div>
-        </footer>
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }

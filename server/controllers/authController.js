@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const User = require('../models/User');
+const departmentService = require('../services/departmentService');
 const { signToken } = require('../utils/jwt');
 const { generateOTP, hashOTP, verifyOTP } = require('../utils/otp');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../services/emailService');
@@ -143,9 +144,9 @@ const register = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Semester must be between 1 and 6.');
   }
 
-  const normalizedDepartment = String(department).trim().toUpperCase();
-  if (!['CSE', 'ELECTRONICS'].includes(normalizedDepartment)) {
-    throw new ApiError(400, 'Department must be CSE or ELECTRONICS.');
+  const normalizedDepartment = department.trim().toUpperCase();
+  if (!(await departmentService.isValidDepartment(normalizedDepartment))) {
+    throw new ApiError(400, 'Choose an active college department.');
   }
 
   let existingUser = await User.findOne({ email: normalizedEmail });

@@ -6,8 +6,8 @@ import {
 } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { ThemeProvider } from "./context/ThemeContext";
 import { SettingsProvider } from "./context/SettingsContext";
+import { UnreadContentProvider } from "./context/UnreadContentContext";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -18,11 +18,12 @@ import TermsAndConditions from "./pages/TermsAndConditions";
 import About from "./pages/About";
 import Practicals from "./pages/Practicals";
 import Assignments from "./pages/Assignments";
-import Chat from "./pages/Chat";
-import Home from "./pages/Home";
 import Notices from "./pages/Notices";
 import NoticeDetail from "./pages/NoticeDetail";
+import Chat from "./pages/Chat";
+import Home from "./pages/Home";
 import PublicInfo from "./pages/PublicInfo";
+import Help from "./pages/Help";
 import SeoManager from "./components/SeoManager";
 
 // Admin Components & Pages
@@ -100,13 +101,15 @@ const AppRoutes = () => {
         element={<About />}
       />
 
+      <Route path="/help" element={<Help />} />
+
       <Route path="/departments" element={<PublicInfo />} />
       <Route path="/departments/cse" element={<PublicInfo />} />
       <Route path="/departments/electronics" element={<PublicInfo />} />
-      <Route path="/faculty" element={<PublicInfo />} />
-      <Route path="/timetable" element={<PublicInfo />} />
-      <Route path="/admissions" element={<PublicInfo />} />
-      <Route path="/contact" element={<PublicInfo />} />
+      <Route path="/faculty" element={<Navigate to="/chatbot" replace />} />
+      <Route path="/timetable" element={<Navigate to="/chatbot" replace />} />
+      <Route path="/admissions" element={<Navigate to="/chatbot" replace />} />
+      <Route path="/contact" element={<Navigate to="/about" replace />} />
 
       <Route
         path="/practicals"
@@ -131,15 +134,8 @@ const AppRoutes = () => {
         element={<Home />}
       />
 
-      <Route
-        path="/notices"
-        element={<Notices />}
-      />
-
-      <Route
-        path="/notices/:id"
-        element={<NoticeDetail />}
-      />
+      <Route path="/notices" element={<Notices />} />
+      <Route path="/notices/:id" element={<NoticeDetail />} />
 
       <Route
         path="/chatbot"
@@ -161,6 +157,7 @@ const AppRoutes = () => {
       >
         <Route index element={<AdminDashboard />} />
         <Route path="students" element={<AdminStudents />} />
+        <Route path="users" element={<AdminStudents />} />
         <Route path="departments" element={<AdminDepartments />} />
         <Route path="faculty" element={<AdminFaculty />} />
         <Route path="notices" element={<AdminNotices />} />
@@ -184,14 +181,14 @@ const AppRoutes = () => {
 
 const App = () => {
   return (
-    <ThemeProvider>
-      <SettingsProvider>
-        <AuthProvider>
+    <SettingsProvider>
+      <AuthProvider>
+        <UnreadContentProvider>
           <AppRoutes />
           <SeoManager />
-        </AuthProvider>
-      </SettingsProvider>
-    </ThemeProvider>
+        </UnreadContentProvider>
+      </AuthProvider>
+    </SettingsProvider>
   );
 };
 

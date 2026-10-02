@@ -11,8 +11,10 @@ import {
   RefreshCw,
   X,
   Check,
+  Image as ImageIcon,
 } from "lucide-react";
 import ConfirmDialog from "../../components/ConfirmDialog";
+import OptionalImageField from "../../components/OptionalImageField";
 
 const initialForm = {
   title: "",
@@ -25,6 +27,7 @@ const initialForm = {
   dueDate: "",
   totalMarks: 100,
   attachmentUrl: "",
+  attachmentFile: null,
   status: "published",
 };
 
@@ -46,12 +49,17 @@ export default function AdminAssignments() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
+  const [existingImage, setExistingImage] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [formError, setFormError] = useState("");
 
   // Delete State
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null });
 
   useEffect(() => {
-    document.title = "Assignments | College AI Assistant";
+    document.title = "Assignments | College Chatbot";
     fetchAssignments();
   }, [deptFilter, semFilter, statusFilter]);
 
@@ -80,6 +88,11 @@ export default function AdminAssignments() {
     setIsEditing(false);
     setEditingId(null);
     setForm(initialForm);
+    setExistingImage(null);
+    setImageFile(null);
+    setRemoveImage(false);
+    setImageError("");
+    setFormError("");
     setModalOpen(true);
   };
 
@@ -97,8 +110,14 @@ export default function AdminAssignments() {
       dueDate: item.dueDate ? new Date(item.dueDate).toISOString().split("T")[0] : "",
       totalMarks: item.totalMarks !== undefined ? item.totalMarks : 100,
       attachmentUrl: item.attachmentUrl || "",
+      attachmentFile: null,
       status: item.status || "published",
     });
+    setExistingImage(item.image || null);
+    setImageFile(null);
+    setRemoveImage(false);
+    setImageError("");
+    setFormError("");
     setModalOpen(true);
   };
 
@@ -106,11 +125,14 @@ export default function AdminAssignments() {
     e.preventDefault();
     setSaving(true);
     setError(null);
+    setFormError("");
     try {
       const payload = {
         ...form,
         semester: Number(form.semester),
         totalMarks: Number(form.totalMarks),
+        imageFile,
+        removeImage,
       };
 
       if (isEditing) {
@@ -125,7 +147,7 @@ export default function AdminAssignments() {
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err) {
       console.error("Save error:");
-      setError(err.response?.data?.message || "Failed to save assignment.");
+      setFormError(err.response?.data?.message || "Failed to save assignment or upload its image.");
     } finally {
       setSaving(false);
     }
@@ -322,6 +344,18 @@ export default function AdminAssignments() {
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        {item.image?.url && (
+                          <a
+                            className="admin-btn-action"
+                            href={item.image.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View image"
+                            aria-label="View assignment image"
+                          >
+                            <ImageIcon size={15} />
+                          </a>
+                        )}
                         {item.status !== "published" ? (
                           <button
                             type="button"
@@ -387,6 +421,11 @@ export default function AdminAssignments() {
 
             <form onSubmit={handleSubmit}>
               <div className="admin-modal-body">
+                {formError && (
+                  <div className="admin-alert error" role="alert" style={{ marginBottom: 14 }}>
+                    <AlertCircle size={16} /> <span>{formError}</span>
+                  </div>
+                )}
                 <div className="admin-form-group">
                   <label className="admin-form-label">Assignment Title *</label>
                   <input
@@ -504,15 +543,39 @@ export default function AdminAssignments() {
                 </div>
 
                 <div className="admin-form-group">
-                  <label className="admin-form-label">Document / Question Sheet URL</label>
-                  <input
-                    type="url"
-                    className="admin-form-input"
-                    placeholder="https://..."
-                    value={form.attachmentUrl}
-                    onChange={(e) => setForm({ ...form, attachmentUrl: e.target.value })}
-                  />
-                </div>
+                    <label className="admin-form-label">Upload PDF / document / image</label>
+                    <input
+                      type="file"
+                      className="admin-form-input"
+                      accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,image/jpeg,image/png,image/webp"
+                      onChange={(event) => setForm({ ...form, attachmentFile: event.target.files?.[0] || null, attachmentUrl: "" })}
+                    />
+                  </div>
+
+                  <div className="admin-form-group">
+                    <label className="admin-form-label">Or document URL</label>
+                    <input
+                      type="url"
+                      className="admin-form-input"
+                      placeholder="https://..."
+                      value={form.attachmentUrl}
+                      onChange={(e) => setForm({ ...form, attachmentUrl: e.target.value, attachmentFile: null })}
+                    />
+                  </div>
+
+                <OptionalImageField
+                  image={existingImage}
+                  file={imageFile}
+                  removeExisting={removeImage}
+                  onFileChange={(file, message) => {
+                    setImageFile(file);
+                    setImageError(message);
+                    if (file) setRemoveImage(false);
+                  }}
+                  onRemoveExisting={() => setRemoveImage(true)}
+                  onRestoreExisting={() => setRemoveImage(false)}
+                  error={imageError}
+                />
               </div>
 
               <div className="admin-modal-footer">

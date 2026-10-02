@@ -3,6 +3,7 @@
 const express = require('express');
 const controller = require('../controllers/practicalController');
 const { protect, authorize } = require('../middleware/auth');
+const { mediaUpload } = require('../middleware/noticeMediaUpload');
 
 const router = express.Router();
 
@@ -13,8 +14,8 @@ router.get('/', controller.listPracticals);
 router.get('/:id', controller.getPracticalById);
 
 // Admin only (or teacher if role present)
-router.post('/', authorize('admin', 'teacher'), controller.createPractical);
-router.put('/:id', authorize('admin', 'teacher'), controller.updatePractical);
+router.post('/', authorize('admin', 'teacher'), mediaUpload, controller.createPractical);
+router.put('/:id', authorize('admin', 'teacher'), mediaUpload, controller.updatePractical);
 router.delete('/:id', authorize('admin', 'teacher'), controller.deletePractical);
 
 module.exports = router;

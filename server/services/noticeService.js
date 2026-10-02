@@ -45,8 +45,8 @@ function buildNoticeFilter(user, query = {}, now = new Date()) {
     if (department) and.push(departmentService.buildExactFilter(department));
   } else if (isPublic) {
     // Public pages can be crawled without exposing expired notices. The
-    // department filter is optional so the public notice page can browse all.
-    if (department) and.push(departmentService.buildExactFilter(department));
+    // department filter includes college-wide notices relevant to that department.
+    if (department) and.push(departmentService.buildVisibilityFilter(department));
   } else {
     // A student may pick a department in the UI; default to their own.
     and.push(departmentService.buildVisibilityFilter(department || user.department));

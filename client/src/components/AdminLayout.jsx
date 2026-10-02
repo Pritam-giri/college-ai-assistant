@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
 import {
   LayoutDashboard,
   Users,
@@ -17,11 +16,7 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
-  Sun,
-  Moon,
-  Monitor,
   LogOut,
-  MessageSquare,
   ArrowLeft,
   Shield,
   FlaskConical,
@@ -31,7 +26,7 @@ import "../admin.css";
 
 const navItems = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { path: "/admin/students", label: "Students", icon: Users },
+  { path: "/admin/users", label: "Users", icon: Users },
   { path: "/admin/departments", label: "Departments", icon: Building2 },
   { path: "/admin/faculty", label: "Faculty", icon: GraduationCap },
   { path: "/admin/notices", label: "Notices", icon: Bell },
@@ -47,7 +42,6 @@ const navItems = [
 
 const AdminLayout = () => {
   const { user, logout } = useAuth();
-  const { theme, resolvedTheme, setTheme } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -56,12 +50,6 @@ const AdminLayout = () => {
   const handleLogout = () => {
     logout();
     navigate("/login");
-  };
-
-  const cycleTheme = () => {
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
   };
 
   const handleBack = () => {
@@ -81,7 +69,7 @@ const AdminLayout = () => {
   const documentTitle = pageTitle === "Dashboard" ? "Admin Dashboard" : pageTitle;
 
   useEffect(() => {
-    document.title = `${documentTitle} | College AI Assistant`;
+    document.title = `${documentTitle} | College Chatbot`;
   }, [documentTitle]);
 
   return (
@@ -184,23 +172,6 @@ const AdminLayout = () => {
             >
               <ArrowLeft size={16} />
               <span>Back</span>
-            </button>
-
-            {/* Theme Toggle Button */}
-            <button
-              type="button"
-              className="admin-header-btn"
-              onClick={cycleTheme}
-              title={`Theme: ${theme} (Click to switch)`}
-            >
-              {theme === "system" ? (
-                <Monitor size={16} />
-              ) : resolvedTheme === "dark" ? (
-                <Moon size={16} />
-              ) : (
-                <Sun size={16} />
-              )}
-              <span style={{ textTransform: "capitalize" }}>{theme}</span>
             </button>
 
             {/* Logout Button */}

@@ -99,10 +99,12 @@ const create = asyncHandler(async (req, res) => {
   let attachment;
   try {
     if (imageFile) {
+      if (process.env.NODE_ENV !== 'production') console.info('[Notice create] Uploading notice image', { fileName: imageFile.safeOriginalName, mimeType: imageFile.mimetype, size: imageFile.size });
       image = await objectStorage.uploadNoticeImage(imageFile);
       uploaded.push(image);
     }
     if (attachmentFile) {
+      if (process.env.NODE_ENV !== 'production') console.info('[Notice create] Uploading notice attachment', { fileName: attachmentFile.safeOriginalName, mimeType: attachmentFile.mimetype, size: attachmentFile.size });
       attachment = {
         ...(await objectStorage.uploadNoticeAttachment(attachmentFile)),
         originalName: attachmentFile.safeOriginalName,
@@ -110,6 +112,7 @@ const create = asyncHandler(async (req, res) => {
       uploaded.push(attachment);
     }
   } catch (error) {
+    if (process.env.NODE_ENV !== 'production') console.error('[Notice create] Media storage stage failed', { stage: 'cloudinary', name: error.name || 'Error', message: error.message, stack: error.stack });
     await cleanupMedia(uploaded);
     throw error;
   }
@@ -129,9 +132,25 @@ const create = asyncHandler(async (req, res) => {
   try {
     notice = await Notice.create({ ...data, postedBy: req.user._id });
   } catch (error) {
+    if (process.env.NODE_ENV !== 'production') console.error('[Notice create] MongoDB Notice creation failed after media upload', {
+      name: error.name || 'Error',
+      message: error.message,
+      code: error.code || null,
+      stack: error.stack,
+      imageMetadataPresent: Boolean(image?.url && image?.publicId),
+      attachmentMetadataPresent: Boolean(attachment?.url && attachment?.publicId),
+    });
     await cleanupMedia(uploaded);
     throw error;
   }
+  if (process.env.NODE_ENV !== 'production') console.info('[Notice create] MongoDB Notice saved', {
+    noticeId: String(notice._id),
+    imageUrlPresent: Boolean(notice.image?.url),
+    imagePublicIdPresent: Boolean(notice.image?.publicId),
+    imageMimeType: notice.image?.mimeType || null,
+    attachmentUrlPresent: Boolean(notice.attachment?.url),
+    attachmentPublicIdPresent: Boolean(notice.attachment?.publicId),
+  });
   await notifyPublishedNotice(notice);
   res.status(201).json({ success: true, data: notice });
 });

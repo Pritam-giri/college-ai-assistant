@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, Search, X } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
@@ -14,9 +15,13 @@ import {
   conversationAPI,
   chatAPI,
 } from "../services/api";
+import "./ChatExperience.css";
 
 const Chat = () => {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const sentInitialQuestion = useRef(false);
 
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
@@ -24,9 +29,21 @@ const Chat = () => {
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    if (!sidebarOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [error, setError] = useState("");
+  const [historyError, setHistoryError] = useState(false);
 
   // Modals state
   const [profileOpen, setProfileOpen] = useState(false);
@@ -52,7 +69,7 @@ const Chat = () => {
      LOAD CONVERSATIONS
   ========================= */
 
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     try {
       const response = await conversationAPI.getAll();
 
@@ -64,22 +81,26 @@ const Chat = () => {
       setConversations(
         Array.isArray(data) ? data : []
       );
+      setHistoryError(false);
     } catch (requestError) {
       if (requestError.response?.status === 401) {
         await logout();
         return;
       }
 
-      console.error("Failed to load conversations:");
-
-      setError("Unable to load chat history.");
+      console.warn("Failed to load chat history", {
+        status: requestError.response?.status,
+        message: requestError.response?.data?.message || requestError.message,
+      });
+      setHistoryError(true);
     }
-  };
+  }, [logout]);
 
   useEffect(() => {
-    document.title = "College AI Assistant";
-    loadConversations();
-  }, []);
+    document.title = "College Chatbot";
+    const request = setTimeout(() => { void loadConversations(); }, 0);
+    return () => clearTimeout(request);
+  }, [loadConversations]);
 
   /* =========================
      SEARCH
@@ -258,7 +279,7 @@ const Chat = () => {
      CREATE CONVERSATION
   ========================= */
 
-  const createConversation = async (firstMessage) => {
+  const createConversation = useCallback(async (firstMessage) => {
     const title =
       firstMessage.length > 45
         ? `${firstMessage.slice(0, 45)}...`
@@ -273,13 +294,13 @@ const Chat = () => {
     });
 
     return response?.data?.data || response?.data;
-  };
+  }, [user?.department]);
 
   /* =========================
      SEND MESSAGE
   ========================= */
 
-  const sendMessage = async (text) => {
+  const sendMessage = useCallback(async (text) => {
     const trimmedText = text.trim();
 
     if (!trimmedText || loading) {
@@ -364,7 +385,7 @@ const Chat = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeConversation, createConversation, loadConversations, loading]);
 
   /* =========================
      RETRY
@@ -386,16 +407,30 @@ const Chat = () => {
     sendMessage(suggestion);
   };
 
+  useEffect(() => {
+    const question = new URLSearchParams(location.search).get("question")?.trim();
+    if (!question || sentInitialQuestion.current) return;
+    sentInitialQuestion.current = true;
+    navigate("/chatbot", { replace: true });
+    void sendMessage(question);
+  }, [location.search, navigate, sendMessage]);
+
   return (
-    <div className="chat-page">
-      {/* Mobile menu button */}
-      <button
-        className="mobile-menu-button"
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open menu"
-      >
-        <Menu size={22} />
-      </button>
+    <div className="chat-experience">
+      <div className="chat-page">
+      {/* Mobile menu trigger is shown only while the drawer is closed. */}
+      {!sidebarOpen && (
+        <button
+          type="button"
+          className="mobile-menu-button"
+          onClick={() => setSidebarOpen(true)}
+          aria-label="Open chat history"
+          aria-expanded={false}
+          aria-controls="chat-sidebar"
+        >
+          <Menu size={22} />
+        </button>
+      )}
 
       {/* Sidebar */}
       <Sidebar
@@ -406,6 +441,7 @@ const Chat = () => {
         onSearch={() => setSearchOpen(true)}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        historyError={historyError}
         onDeleteConversation={openDeleteDialog}
         onRenameConversation={openRenameDialog}
         onOpenProfile={() => setProfileOpen(true)}
@@ -426,7 +462,6 @@ const Chat = () => {
         <ChatWindow
           messages={messages}
           loading={loading}
-          error={error}
           onSuggestionClick={handleSuggestionClick}
           onRetry={handleRetry}
         />
@@ -544,6 +579,7 @@ const Chat = () => {
           setDeleteModal({ open: false, id: null, loading: false })
         }
       />
+      </div>
     </div>
   );
 };

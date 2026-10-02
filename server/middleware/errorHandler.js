@@ -62,10 +62,13 @@ function errorHandler(err, req, res, next) {
       name: err.name || 'Error',
       statusCode,
       method: req.method,
-      route: req.route?.path || 'unmatched',
+      route: req.originalUrl || req.route?.path || 'unmatched',
+      ...(isProduction ? {} : { message: err.message, stack: err.stack }),
     });
     if (isProduction) {
-      message = statusCode === 503 ? 'Service temporarily unavailable' : 'Internal server error';
+      message = err.isAIProviderError
+        ? 'The AI service is temporarily unavailable. Please try again shortly.'
+        : statusCode === 503 ? 'Service temporarily unavailable' : 'Internal server error';
       errors = undefined;
     }
   }

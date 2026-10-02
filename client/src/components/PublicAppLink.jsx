@@ -12,7 +12,7 @@ export default function PublicAppLink({ className, back = false }) {
   const isAdmin = String(user?.role || "").toLowerCase() === "admin";
   const to = isAuthenticated ? (isAdmin ? "/admin" : "/") : "/login";
   const label = isAuthenticated
-    ? (isAdmin ? "Open Admin Panel" : "Back to College AI Assistant")
+    ? (isAdmin ? "Open Admin Panel" : "Back to College Chatbot")
     : "Sign In";
 
   return (

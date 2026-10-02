@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const { escapeRegex } = require('../utils/text');
 const { validateHttpUrl } = require('../utils/httpUrl');
 const { notifyPublishedRecord } = require('../services/notificationService');
+const { uploadedImage, uploadedAttachment, createWithMedia, updateWithMedia, cleanupAcademicMedia } = require('../services/academicImageService');
 
 // GET /api/assignments
 const listAssignments = asyncHandler(async (req, res) => {
@@ -95,6 +96,8 @@ const createAssignment = asyncHandler(async (req, res) => {
     attachmentUrl,
     status,
   } = req.body;
+  const attachmentFile = uploadedAttachment(req);
+  if (attachmentFile && String(attachmentUrl || '').trim()) throw new ApiError(400, 'Choose an attachment upload or a URL, not both.');
 
   validateHttpUrl(attachmentUrl, 'attachmentUrl');
 
@@ -112,7 +115,7 @@ const createAssignment = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Department must be CSE, ELECTRONICS, or ALL.');
   }
 
-  const assignment = await Assignment.create({
+  const assignment = await createWithMedia(Assignment, {
     title: title.trim(),
     description: description ? description.trim() : '',
     subject: subject.trim(),
@@ -125,7 +128,7 @@ const createAssignment = asyncHandler(async (req, res) => {
     attachmentUrl: attachmentUrl ? attachmentUrl.trim() : '',
     status: status ? status.toLowerCase() : 'published',
     createdBy: req.user._id,
-  });
+  }, uploadedImage(req), attachmentFile, 'assignment');
 
   await notifyPublishedRecord(assignment, 'ASSIGNMENT', `${assignment.subject}${assignment.dueDate ? ` · Due ${assignment.dueDate.toLocaleDateString('en-IN')}` : ''}`);
 
@@ -157,6 +160,8 @@ const updateAssignment = asyncHandler(async (req, res) => {
     attachmentUrl,
     status,
   } = req.body;
+  const attachmentFile = uploadedAttachment(req);
+  if (attachmentFile && String(attachmentUrl || '').trim()) throw new ApiError(400, 'Choose an attachment upload or a URL, not both.');
 
   validateHttpUrl(attachmentUrl, 'attachmentUrl');
 
@@ -181,10 +186,17 @@ const updateAssignment = asyncHandler(async (req, res) => {
   if (instructions !== undefined) assignment.instructions = instructions ? instructions.trim() : '';
   if (dueDate !== undefined) assignment.dueDate = dueDate ? new Date(dueDate) : null;
   if (totalMarks !== undefined) assignment.totalMarks = Number(totalMarks);
-  if (attachmentUrl !== undefined) assignment.attachmentUrl = attachmentUrl ? attachmentUrl.trim() : '';
+  const attachmentData = attachmentUrl !== undefined ? { attachmentUrl: attachmentUrl ? attachmentUrl.trim() : '' } : {};
   if (status) assignment.status = status.toLowerCase();
 
-  await assignment.save();
+  await updateWithMedia(
+    assignment,
+    attachmentData,
+    uploadedImage(req),
+    req.body.removeImage === 'true',
+    attachmentFile,
+    'assignment'
+  );
 
   await notifyPublishedRecord(assignment, 'ASSIGNMENT', `${assignment.subject}${assignment.dueDate ? ` · Due ${assignment.dueDate.toLocaleDateString('en-IN')}` : ''}`);
 
@@ -204,6 +216,7 @@ const deleteAssignment = asyncHandler(async (req, res) => {
   }
 
   await assignment.deleteOne();
+  await cleanupAcademicMedia(assignment);
 
   res.json({
     success: true,

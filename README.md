@@ -82,9 +82,10 @@ to 10 MB or link externally hosted PDFs. File uploads require Cloudinary: config
 
 ### PDF question answering (RAG)
 
-Set `GEMINI_API_KEY` for document embeddings. Chat generation can use Gemini or Groq via
-`AI_PROVIDER`, but indexing and retrieval use Gemini embeddings. Upload a PDF from the
-admin Documents page; its **AI Search** status shows whether indexing succeeded. Answers
+Set `GROQ_API_KEY` and `AI_PROVIDER=groq` for chat generation. The configured model is
+`openai/gpt-oss-120b`. Set `GEMINI_API_KEY` only if you use Gemini document embeddings.
+Upload a
+PDF from the admin Documents page; its **AI Search** status shows whether indexing succeeded. Answers
 that use an indexed PDF include links to their source documents. PDF links remain download
 links and are not indexed automatically. Scanned PDFs need OCR before they can be indexed.
 
@@ -161,6 +162,20 @@ Public informational pages clearly identify this as Pritam Giri's independent
 student project. Department pages link to related notices, faculty and timetable
 information. No college contact details, dates, fees or policies are fabricated.
 
+### Development sample records
+
+Optional records are available for chatbot demonstrations. They are explicitly
+labeled `SAMPLE / DEVELOPMENT DATA`, and the seed script refuses to run with
+`NODE_ENV=production`. Set `ALLOW_SAMPLE_DATA=true` in the local `.env`, then run:
+
+```powershell
+npm run seed --prefix server
+npm run seed:sample --prefix server
+```
+
+These records use placeholder faculty, class slots, notices, and college FAQs.
+They must not be presented as verified college information.
+
 ## Deployment
 
 Deployment configuration is prepared for a Vercel static frontend, a Render Node
@@ -181,8 +196,8 @@ these files; connect the repository to your own provider accounts to deploy.**
    `knowledgechunks` collection using the definition above. A small Atlas cluster
    can be used for a student prototype; monitor it and scale it for production
    traffic.
-4. Prepare Cloudinary credentials for notice/document uploads and Gemini API
-   credentials for answers and PDF embeddings. Add SMTP credentials if email OTP
+4. Prepare Cloudinary credentials for notice/document uploads, Groq credentials for
+   answers, and Gemini credentials only if using PDF embeddings. Add SMTP credentials if email OTP
    and password recovery will be used.
 
 ### Seed the production database

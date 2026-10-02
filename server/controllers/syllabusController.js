@@ -4,6 +4,7 @@ const Syllabus = require('../models/Syllabus');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateHttpUrl } = require('../utils/httpUrl');
+const { uploadedImage, createWithImage, updateWithImage } = require('../services/academicImageService');
 
 const SYLLABUS_FIELDS = [
   'department',
@@ -20,6 +21,17 @@ function pickSyllabusFields(payload) {
   for (const field of SYLLABUS_FIELDS) {
     if (payload[field] !== undefined) {
       data[field] = payload[field];
+    }
+  }
+
+  if (typeof data.topics === 'string') {
+    try {
+      data.topics = JSON.parse(data.topics);
+    } catch {
+      throw new ApiError(400, 'Topics must be a valid list.');
+    }
+    if (!Array.isArray(data.topics) || data.topics.some((topic) => typeof topic !== 'string')) {
+      throw new ApiError(400, 'Topics must be a valid list.');
     }
   }
 
@@ -66,7 +78,7 @@ const getOne = asyncHandler(async (req, res) => {
 const create = asyncHandler(async (req, res) => {
   const data = pickSyllabusFields(req.body);
   if (data.fileUrl !== undefined) data.fileUrl = validateHttpUrl(data.fileUrl, 'fileUrl');
-  const syllabus = await Syllabus.create(data);
+  const syllabus = await createWithImage(Syllabus, data, uploadedImage(req), 'syllabus');
 
   res.status(201).json({
     success: true,
@@ -84,8 +96,13 @@ const update = asyncHandler(async (req, res) => {
 
   const data = pickSyllabusFields(req.body);
   if (data.fileUrl !== undefined) data.fileUrl = validateHttpUrl(data.fileUrl, 'fileUrl');
-  syllabus.set(data);
-  await syllabus.save();
+  await updateWithImage(
+    syllabus,
+    data,
+    uploadedImage(req),
+    req.body.removeImage === 'true',
+    'syllabus'
+  );
 
   res.json({
     success: true,

@@ -160,11 +160,21 @@ const register = asyncHandler(async (req, res) => {
   const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
   let user;
+  let previousUnverifiedState;
 
   if (existingUser && !existingUser.isEmailVerified) {
     // Update existing unverified registration with new credentials
+    previousUnverifiedState = {
+      name: existingUser.name,
+      rollNumber: existingUser.rollNumber,
+      department: existingUser.department,
+      semester: existingUser.semester,
+      verificationOtpHash: existingUser.verificationOtpHash,
+      verificationOtpExpiresAt: existingUser.verificationOtpExpiresAt,
+      verificationOtpAttempts: existingUser.verificationOtpAttempts,
+      verificationOtpLastSentAt: existingUser.verificationOtpLastSentAt,
+    };
     existingUser.name = String(name).trim();
-    existingUser.password = String(password);
     existingUser.rollNumber = String(rollNumber).trim();
     existingUser.department = normalizedDepartment;
     existingUser.semester = semesterNumber;
@@ -201,11 +211,27 @@ const register = asyncHandler(async (req, res) => {
       otp,
     });
   } catch (emailErr) {
-    console.error('Failed to send verification email', { code: emailErr?.code || 'unknown' });
+    console.error('Failed to send verification email', {
+      code: emailErr?.code || 'unknown',
+      message: emailErr?.message || 'Email transport failed',
+    });
+    if (previousUnverifiedState) {
+      Object.assign(user, previousUnverifiedState);
+      await user.save();
+    } else {
+      await user.deleteOne();
+    }
     throw new ApiError(
       500,
-      'Account registered, but failed to send verification email. Please click resend code on the verification page.'
+      'Unable to send the verification email right now. Please try registering again shortly.'
     );
+  }
+
+  if (existingUser && !existingUser.isEmailVerified) {
+    // Update the password only after delivery, so a failed send preserves the
+    // prior login credentials for this unverified account.
+    user.password = String(password);
+    await user.save();
   }
 
   res.status(201).json({
@@ -338,7 +364,10 @@ const resendVerification = asyncHandler(async (req, res) => {
       otp,
     });
   } catch (emailErr) {
-    console.error('Failed to resend verification email', { code: emailErr?.code || 'unknown' });
+    console.error('Failed to resend verification email', {
+      code: emailErr?.code || 'unknown',
+      message: emailErr?.message || 'Email transport failed',
+    });
     throw new ApiError(500, 'Failed to send verification email. Please try again.');
   }
 

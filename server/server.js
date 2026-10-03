@@ -4,9 +4,17 @@ require('./utils/loadEnv');
 
 const mongoose = require('mongoose');
 const app = require('./app');
+const { validateEmailConfig } = require('./services/emailService');
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('\n❌ JWT_SECRET is missing or shorter than 32 characters.');
+  process.exit(1);
+}
+
+try {
+  validateEmailConfig();
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 

@@ -1,18 +1,62 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: Number(process.env.SMTP_PORT) === 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+const EMAIL_TIMEOUT_MS = 15000;
+
+function getEmailConfig() {
+  const host = process.env.SMTP_HOST?.trim();
+  const rawPort = process.env.SMTP_PORT?.trim();
+  const port = Number(rawPort);
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS;
+  const missing = [];
+
+  if (!host) missing.push('SMTP_HOST');
+  if (!rawPort) missing.push('SMTP_PORT');
+  if (!user) missing.push('SMTP_USER');
+  if (!pass) missing.push('SMTP_PASS');
+
+  if (missing.length) {
+    throw new Error(`Email configuration is missing required environment variables: ${missing.join(', ')}`);
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('Email configuration error: SMTP_PORT must be an integer between 1 and 65535.');
+  }
+
+  return { host, port, secure: port === 465, user, pass };
+}
+
+function validateEmailConfig() {
+  const config = getEmailConfig();
+  console.info('Email SMTP configuration', {
+    provider: config.host === 'smtp.gmail.com' ? 'Gmail SMTP' : 'Custom SMTP',
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    smtpUserPresent: Boolean(config.user),
+    smtpPasswordPresent: Boolean(config.pass),
+    fromAddressPresent: Boolean(process.env.SMTP_FROM?.trim()),
+  });
+}
+
+function createTransporter() {
+  const config = getEmailConfig();
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    connectionTimeout: EMAIL_TIMEOUT_MS,
+    greetingTimeout: EMAIL_TIMEOUT_MS,
+    socketTimeout: EMAIL_TIMEOUT_MS,
+    dnsTimeout: EMAIL_TIMEOUT_MS,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  });
+}
 
 const DEFAULT_FROM =
-  process.env.SMTP_FROM ||
-  '"Government Polytechnic Unnao - College AI Assistant" <gpunnaocollegeassistant@gmail.com>';
+  process.env.SMTP_FROM || process.env.SMTP_USER;
 
 /**
  * Clean institutional email template for Government Polytechnic Unnao.
@@ -122,7 +166,7 @@ async function sendVerificationEmail({ email, name, otp }) {
     footerNote,
   });
 
-  return transporter.sendMail({
+  return createTransporter().sendMail({
     from: DEFAULT_FROM,
     to: email,
     subject,
@@ -148,7 +192,7 @@ async function sendPasswordResetEmail({ email, name, otp }) {
     footerNote,
   });
 
-  return transporter.sendMail({
+  return createTransporter().sendMail({
     from: DEFAULT_FROM,
     to: email,
     subject,
@@ -157,6 +201,7 @@ async function sendPasswordResetEmail({ email, name, otp }) {
 }
 
 module.exports = {
+  validateEmailConfig,
   sendVerificationEmail,
   sendPasswordResetEmail,
 };

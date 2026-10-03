@@ -25,10 +25,6 @@ services:
         value: gemini-2.5-flash
       - key: GEMINI_EMBEDDING_MODEL
         value: gemini-embedding-001
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "587"
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
@@ -43,9 +39,7 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
-      - key: SMTP_USER
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
+      - key: EMAIL_FROM
         sync: false

@@ -519,6 +519,58 @@ test('student registration accepts active departments added in the database', as
   assert.equal(createdUser.department, 'ME');
   assert.equal(createdUser.role, 'student');
   assert.equal(sentEmail.otp, '123456');
+  assert.equal(JSON.stringify(res.body).includes('123456'), false);
+});
+
+test('registration does not return or log an OTP when email delivery fails', async () => {
+  let deleted = false;
+  const user = {
+    email: 'student@example.test',
+    name: 'Test Student',
+    async deleteOne() { deleted = true; },
+  };
+  const controller = loadFresh('controllers/authController', {
+    paths: {
+      'models/User': {
+        findOne: async () => null,
+        create: async () => user,
+      },
+      'services/departmentService': { isValidDepartment: async () => true },
+      'utils/otp': { generateOTP: () => '987654', hashOTP: () => 'hashed-code', verifyOTP: () => false },
+      'services/emailService': {
+        sendVerificationEmail: async () => {
+          const error = new Error('Email provider returned HTTP 503.');
+          error.code = 'EMAIL_API_FAILURE';
+          throw error;
+        },
+        sendPasswordResetEmail: async () => {},
+      },
+    },
+  });
+
+  const res = fakeRes();
+  const logged = [];
+  const originalError = console.error;
+  console.error = (...args) => logged.push(args.join(' '));
+  let receivedError;
+  try {
+    await controller.register({ body: {
+      name: 'Test Student',
+      email: 'student@example.test',
+      password: 'Password123!',
+      rollNumber: 'R-1',
+      department: 'CSE',
+      semester: 1,
+    } }, res, (error) => { receivedError = error; });
+  } finally {
+    console.error = originalError;
+  }
+
+  assert.equal(deleted, true);
+  assert.equal(receivedError.statusCode, 500);
+  assert.equal(receivedError.message.includes('987654'), false);
+  assert.equal(JSON.stringify(res.body).includes('987654'), false);
+  assert.equal(logged.join(' ').includes('987654'), false);
 });
 
 // Runs middleware and resolves with whatever next() was called with.

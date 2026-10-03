@@ -197,8 +197,8 @@ these files; connect the repository to your own provider accounts to deploy.**
    can be used for a student prototype; monitor it and scale it for production
    traffic.
 4. Prepare Cloudinary credentials for notice/document uploads, Groq credentials for
-   answers, and Gemini credentials only if using PDF embeddings. Add SMTP credentials if email OTP
-   and password recovery will be used.
+   answers, and Gemini credentials only if using PDF embeddings. For email OTP and password
+   recovery, configure the server-side `RESEND_API_KEY` and `EMAIL_FROM` values for Resend.
 
 ### Seed the production database
 

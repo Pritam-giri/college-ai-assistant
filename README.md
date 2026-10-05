@@ -154,9 +154,10 @@ current route. Private and login-required routes are marked `noindex`.
 The Vite frontend serves `/robots.txt` and `/sitemap.xml` during development and
 emits both files into `client/dist` during a production build. Copy
 `client/.env.example` to `client/.env` for local settings. Before deployment, set
-`VITE_SITE_URL` to the deployed frontend origin (for example, `https://your-real-domain.tld`)
-in the frontend build environment so sitemap URLs and the robots sitemap reference
-use the real public domain. Without it, production builds warn and use localhost.
+`VITE_SITE_URL` in the frontend build environment so sitemap URLs and the robots
+sitemap reference use the public domain. For this production site, set it to
+`https://gpunnaochatbot.vercel.app`. Production builds use this origin as a fallback
+if the build environment does not provide `VITE_SITE_URL`; localhost is used only in development.
 
 Public informational pages clearly identify this as Pritam Giri's independent
 student project. Department pages link to related notices, faculty and timetable
@@ -220,16 +221,18 @@ Access.
 
 In Vercel, import the repository with its root directory set to the repository
 root. The checked-in `vercel.json` sets the install command, build command, output
-directory and SPA rewrite. Deploy once to receive the Vercel site URL, then add
-these Production environment variables in Project Settings:
+directory and SPA rewrite. In the Vercel project dashboard, open **Settings →
+Environment Variables** and add the following values. Select **Production** for
+`VITE_SITE_URL`; choose the environments needed for `VITE_API_URL`:
 
 ```text
 VITE_API_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
-VITE_SITE_URL=https://YOUR-PUBLIC-FRONTEND-DOMAIN
+VITE_SITE_URL=https://gpunnaochatbot.vercel.app
 ```
 
-Redeploy after setting them. The first deploy is only to establish the frontend
-URL; the final build must use the actual frontend and API origins.
+Vite reads these variables during the build. Redeploy after setting them so the
+production build emits sitemap URLs and a robots sitemap reference for the public
+frontend domain.
 
 ### Deploy the API
 
